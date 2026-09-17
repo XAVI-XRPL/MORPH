@@ -28,6 +28,7 @@ set(MORPH_ENGINE_SOURCES
     src/engine/bass/BassEngine.cpp
     src/engine/topline/TopVoiceEngine.cpp
     src/engine/progression/Progression.cpp
+    src/engine/morph/MorphEngine.cpp
     src/engine/performance/PerformanceEngine.cpp
     src/engine/EngineHost.cpp
     src/midi/MidiScheduler.cpp
@@ -109,6 +110,7 @@ target_sources(MorphTests PRIVATE
     tests/topline/TopVoiceEngineTests.cpp
     tests/progression/ProgressionPlanTests.cpp
     tests/progression/PlanDumpTests.cpp
+    tests/morph/MorphLockTests.cpp
     tests/performance/PerformanceTests.cpp
     tests/midi/MidiSchedulerTests.cpp
     tests/midi/MidiExportTests.cpp

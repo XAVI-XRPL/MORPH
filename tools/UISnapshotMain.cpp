@@ -70,6 +70,14 @@ int main (int argc, char* argv[])
     processor->engine.play();
     pumpFrames (40);
     snapshot ("morph_play.png");
+    processor->engine.stop();
+    pumpFrames (6);
+
+    // 5. M5 workflow: lock slot 2 (iv), morph the progression.
+    processor->engine.toggleSlotLockFromUi (2);
+    processor->engine.morphProgressionFromUi();
+    pumpFrames (20);
+    snapshot ("morph_locked_morphed.png");
 
     processor->engine.stop();
     juce::MessageManager::deleteInstance();

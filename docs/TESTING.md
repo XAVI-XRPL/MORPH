@@ -9,7 +9,7 @@ ctest --test-dir build --output-on-failure
 ./build/MorphTests_artefacts/Release/MorphTests
 ```
 
-Current: **59 suites, ~2600 checks, all passing.**
+Current: **67 suites, ~2860 checks, all passing.**
 
 ## Harness
 
@@ -62,6 +62,11 @@ sequences.
 
 **progression/** — 4-slot plan validity/determinism/identities, export ==
 plan playback, melodic-bass-and-top-contour acceptance guard.
+
+**morph/** + **undo/** — same seed + same parameters = same sibling; locked
+slots never mutate (20 seeds); unlocked material can mutate; zero-amount
+barely changes; substitutions stay diatonic; undo/redo exact restore; redo
+invalidation on new action; engine-level lock-survives-morph (§99 acceptance).
 
 **integration/** — `golden.pressC3ProducesCm9` (full §105 truth: chord,
 roman, roles, state), `golden.sameChordAcrossPerformanceModes` (§96

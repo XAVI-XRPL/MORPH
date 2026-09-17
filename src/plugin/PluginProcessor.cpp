@@ -16,6 +16,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout MorphAudioProcessor::createP
     layout.add (std::make_unique<API> ("performanceMode", "Performance", 0, 2, 0));
     layout.add (std::make_unique<APF> ("strumSpread", "Strum Spread", NAP (20.0f, 120.0f), 42.0f));
 
+    layout.add (std::make_unique<API> ("togetherKind",   "Together Kind", 0, 3, 0));
+    layout.add (std::make_unique<API> ("strumCurve",     "Strum Curve",   0, 3, 3)); // human
+    layout.add (std::make_unique<API> ("strumVelShape",  "Strum Vel",     0, 2, 1)); // rise
+    layout.add (std::make_unique<API> ("bassPolicy",     "Bass Policy",   0, 4, 0));
+    layout.add (std::make_unique<API> ("topPolicy",      "Top Policy",    0, 4, 0));
+
     layout.add (std::make_unique<APF> ("color",   "COLOR",   NAP (0.0f, 1.0f), 0.5f));
     layout.add (std::make_unique<APF> ("motion",  "MOTION",  NAP (0.0f, 1.0f), 0.5f));
     layout.add (std::make_unique<APF> ("morph",   "MORPH",   NAP (0.0f, 1.0f), 0.5f));
@@ -72,6 +78,11 @@ void MorphAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto load = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
     engine.keyIndex.store ((int) load ("keyIndex"), std::memory_order_relaxed);
     engine.strumSpreadMs.store (load ("strumSpread"), std::memory_order_relaxed);
+    engine.togetherKind.store ((int) load ("togetherKind"), std::memory_order_relaxed);
+    engine.strumCurve.store ((int) load ("strumCurve"), std::memory_order_relaxed);
+    engine.strumVelocityShape.store ((int) load ("strumVelShape"), std::memory_order_relaxed);
+    engine.bassPolicy.store ((int) load ("bassPolicy"), std::memory_order_relaxed);
+    engine.topVoicePolicy.store ((int) load ("topPolicy"), std::memory_order_relaxed);
     engine.colorKnob.store (load ("color"), std::memory_order_relaxed);
     engine.motionKnob.store (load ("motion"), std::memory_order_relaxed);
     engine.morphKnob.store (load ("morph"), std::memory_order_relaxed);
@@ -124,6 +135,17 @@ void MorphAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
 void MorphAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    // Composition state rides along with the parameter state.
+    const auto prog = engine.getProgressionForUi();
+    for (int i = 0; i < Progression::numSlots; ++i)
+    {
+        apvts.state.setProperty ("progDegree" + juce::String (i),
+                                 prog.slots[(size_t) i].degree.value, nullptr);
+        apvts.state.setProperty ("progLock" + juce::String (i),
+                                 prog.slots[(size_t) i].locked, nullptr);
+    }
+    apvts.state.setProperty ("morphVariation", engine.getMorphVariation(), nullptr);
+
     if (auto xml = apvts.copyState().createXml())
         copyXmlToBinary (*xml, destData);
 }
@@ -131,7 +153,24 @@ void MorphAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 void MorphAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
+    {
         apvts.replaceState (juce::ValueTree::fromXml (*xml));
+
+        // Restore composition state.
+        if (apvts.state.hasProperty ("progDegree0"))
+        {
+            auto prog = engine.getProgressionForUi();
+            for (int i = 0; i < Progression::numSlots; ++i)
+            {
+                prog.slots[(size_t) i].degree =
+                    ScaleDegree { (int) apvts.state.getProperty ("progDegree" + juce::String (i), 1) };
+                prog.slots[(size_t) i].locked =
+                    (bool) apvts.state.getProperty ("progLock" + juce::String (i), false);
+            }
+            engine.setProgressionFromUi (prog);
+        }
+        engine.setMorphVariation ((int) apvts.state.getProperty ("morphVariation", 0));
+    }
 }
 
 juce::AudioProcessorEditor* MorphAudioProcessor::createEditor()

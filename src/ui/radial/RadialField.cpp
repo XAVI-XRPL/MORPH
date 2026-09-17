@@ -27,6 +27,7 @@ void RadialField::setProgression (const Progression& p, const KeyContext& key,
         const auto candidate = harmony.chordForDegree (key, p.slots[(size_t) i].degree, style, 0.5f);
         slotSymbols[i] = chordSymbolToString (candidate.chord, key.prefersFlats());
         slotRomans[i] = romanFunctionToString (candidate.roman);
+        slotLocked[i] = p.slots[(size_t) i].locked;
     }
     repaint();
 }
@@ -132,6 +133,15 @@ void RadialField::drawPucks (juce::Graphics& g, juce::Point<float> centre, float
 
         materials::drawPuck (g, pos[i], pr, slotColours[i], glow);
 
+        // Locked slots wear a quiet ring (§67 state marker).
+        if (slotLocked[i])
+        {
+            g.setColour (MorphTheme::textOnDark.withAlpha (0.75f));
+            g.drawEllipse (pos[i].x - pr - 4.0f, pos[i].y - pr - 4.0f,
+                           (pr + 4.0f) * 2.0f, (pr + 4.0f) * 2.0f, 1.4f);
+            g.fillEllipse (pos[i].x + pr * 0.55f, pos[i].y - pr * 0.95f, 5.0f, 5.0f);
+        }
+
         materials::drawEngravedLabel (g, slotRomans[i],
                                       { pos[i].x - pr * 2.2f, pos[i].y - pr * 2.35f, pr * 4.4f, 15.0f },
                                       12.5f, MorphTheme::textOnDark.withAlpha (0.92f));
@@ -199,6 +209,38 @@ void RadialField::drawOrbAndLabels (juce::Graphics& g, juce::Point<float> centre
                                       { centre.x - orbR * 2.4f, centre.y - orbR * 2.05f,
                                         orbR * 4.8f, orbR * 0.7f },
                                       13.0f, MorphTheme::textOnDark.withAlpha (0.75f));
+    }
+}
+
+int RadialField::puckAt (juce::Point<float> p) const
+{
+    auto bounds = getLocalBounds().toFloat();
+    const float side = juce::jmin (bounds.getWidth(), bounds.getHeight());
+    const auto centre = bounds.getCentre();
+    const float radius = side * 0.47f;
+    const float pr = radius * 0.10f + 8.0f; // generous hit zone
+
+    const juce::Point<float> pos[4] =
+    {
+        { centre.x - radius * 0.64f, centre.y },
+        { centre.x, centre.y - radius * 0.64f },
+        { centre.x + radius * 0.64f, centre.y },
+        { centre.x, centre.y + radius * 0.64f }
+    };
+
+    for (int i = 0; i < 4; ++i)
+        if (pos[i].getDistanceFrom (p) <= pr)
+            return i;
+    return -1;
+}
+
+void RadialField::mouseDown (const juce::MouseEvent& e)
+{
+    if (e.mods.isRightButtonDown() || e.mods.isCtrlDown())
+    {
+        const int slot = puckAt (e.position);
+        if (slot >= 0 && onSlotLockToggle)
+            onSlotLockToggle (slot);
     }
 }
 

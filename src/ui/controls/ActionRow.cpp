@@ -144,6 +144,15 @@ void MorphActionButton::drawGlyph (juce::Graphics& g, juce::Rectangle<float> a)
     }
 }
 
+void MorphActionButton::mouseDrag (const juce::MouseEvent& e)
+{
+    if (! dragged && onDragStart && e.getDistanceFromDragStart() > 8)
+    {
+        dragged = true;
+        onDragStart();
+    }
+}
+
 void MorphActionButton::mouseUp (const juce::MouseEvent&)
 {
     pressed = false;
@@ -162,6 +171,7 @@ ActionRow::ActionRow()
     play.onClick = [this] { if (onPlay) onPlay(); };
     explore.onClick = [this] { if (onExplore) onExplore(); };
     midi.onClick = [this] { if (onMidi) onMidi(); };
+    midi.onDragStart = [this] { if (onMidiDragStart) onMidiDragStart(); };
     more.onClick = [this] { if (onMore) onMore(); };
 
     for (auto* b : { &save, &undo, &redo, &morph, &play, &explore, &midi, &more })

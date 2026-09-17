@@ -36,10 +36,13 @@ chord, the keyboard shows exactly the sounding MIDI notes.
 **Live override (§65).** While the sequencer plays, holding a note suppresses
 sequenced output; releasing resumes at the next bar boundary.
 
-**MORPH action (interim).** Deterministic voicing sibling of the active chord —
-same identity, same pitch classes, altered shape (top-voice octave lift / open
-upper structure / dropped seventh). Full MorphEngine with locks/seeds is M5
-(see DECISIONS.md D13).
+**MORPH action (M5).** The MORPH button creates a deterministic musical sibling
+of the progression: stylistic degree substitutions on unlocked slots (tonic
+anchor protected below 0.75 morph amount), voicing variation advances, locked
+slots never change. Right-click a progression puck to lock/unlock it (ring +
+pin marker). UNDO/REDO restore exact composition state. EXPLORE offers
+progression variations and the curated performance presets (§58). MIDI
+supports save-dialog export and drag-out into the DAW.
 
 **KEY / SCALE (§11).** Segmented pill: arrows step through 12 minor keys,
 center opens the selection menu. FEEL shows Modern R&B; the popover lists
@@ -55,6 +58,5 @@ performance to a `.mid` file (save dialog). Timing equals heard scheduling
 
 ## Deferred to later milestones
 
-Locking, undo/redo, full MorphEngine + morph knob semantics, progression
-generation/beam search/bank (M6/M7), PULSE/PATTERN/ARP (M8), Song Kit
-(M9/M10), capture (§80), MIDI drag-out (drag gesture lands with M5).
+Progression generation/beam search/bank (M6/M7), PULSE/PATTERN/ARP (M8),
+Song Kit (M9/M10), capture (§80).

@@ -25,13 +25,18 @@ class RadialField : public juce::Component
 public:
     RadialField();
 
+    /** Right-click a puck to lock/unlock its slot (§67). */
+    std::function<void (int slot)> onSlotLockToggle;
+
     void setState (const MusicalPlaybackState& newState);
     void setProgression (const Progression& p, const KeyContext& key,
                          const StyleProfile& style);
 
     void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
 
 private:
+    int puckAt (juce::Point<float> p) const; // slot index or -1
     void drawGuides (juce::Graphics&, juce::Point<float> centre, float radius);
     void drawVoiceArcs (juce::Graphics&, juce::Point<float> centre, float radius);
     void drawPucks (juce::Graphics&, juce::Point<float> centre, float radius);
@@ -45,6 +50,7 @@ private:
     juce::String slotSymbols[4];
     juce::String slotRomans[4];
     juce::Colour slotColours[4];
+    bool slotLocked[4] = { false, false, false, false };
 
     float activity = 0.0f;
     int lastActiveSlot = -1;

@@ -95,14 +95,15 @@ ChordRealization EngineHost::realizeDegree (ScaleDegree degree, const VoiceLeadi
 void EngineHost::buildProgressionPlan (std::array<ChordRealization, 4>& out) const
 {
     VoiceLeadingMemory mem;
-    for (int i = 0; i < progression.size; ++i)
+    const auto& prog = activeProgression();
+    for (int i = 0; i < prog.size; ++i)
     {
-        out[(size_t) i] = realizeDegree (progression.slots[(size_t) i].degree, mem, i);
+        out[(size_t) i] = realizeDegree (prog.slots[(size_t) i].degree, mem, i);
         advanceMemory (mem, out[(size_t) i]);
     }
 
     // Loop closure: re-realize slot 0 against slot 3 so the wrap is smooth.
-    auto closed = realizeDegree (progression.slots[0].degree, mem, 0);
+    auto closed = realizeDegree (prog.slots[0].degree, mem, 0);
     if (closed.valid)
         out[0] = closed;
 }
@@ -120,12 +121,53 @@ uint64_t EngineHost::computePlanSignature() const
 void EngineHost::rebuildPlanIfNeeded()
 {
     const auto sig = computePlanSignature();
-    if (! planValid || sig != planSignature)
+    const bool dirty = planDirty.exchange (false, std::memory_order_relaxed);
+    if (! planValid || dirty || sig != planSignature)
     {
         buildProgressionPlan (slotPlan);
         planSignature = sig;
         planValid = true;
     }
+}
+
+//==============================================================================
+// Composition editing (message thread)
+
+void EngineHost::setProgressionFromUi (const Progression& p)
+{
+    const int current = progressionIndex.load (std::memory_order_acquire);
+    const int next = 1 - current;
+    progressionBuffers[(size_t) next] = p;
+    progressionIndex.store (next, std::memory_order_release);
+    planDirty.store (true, std::memory_order_release);
+    progressionVersion.fetch_add (1, std::memory_order_release);
+}
+
+Progression EngineHost::getProgressionForUi() const
+{
+    return activeProgression();
+}
+
+void EngineHost::morphProgressionFromUi()
+{
+    const auto current = activeProgression();
+    const uint32_t counterSeed = morphCounter.fetch_add (1, std::memory_order_relaxed) + 1;
+    const auto sibling = morphEngine.morphProgression (
+        current, morphKnob.load (std::memory_order_relaxed),
+        0x4D4F5250u ^ (counterSeed * 2246822519u));
+    setProgressionFromUi (sibling);
+
+    // Voicing dimension of the sibling (D13): advance the variation too.
+    morphVariation.fetch_add (1, std::memory_order_relaxed);
+}
+
+void EngineHost::toggleSlotLockFromUi (int slot)
+{
+    if (slot < 0 || slot >= 4)
+        return;
+    auto p = activeProgression();
+    p.slots[(size_t) slot].locked = ! p.slots[(size_t) slot].locked;
+    setProgressionFromUi (p);
 }
 
 void EngineHost::updateGeneratedState (const ChordRealization& r,
@@ -299,7 +341,7 @@ void EngineHost::stop()  { transportCommand.store (2, std::memory_order_relaxed)
 
 void EngineHost::scheduleSequencerSlot (int slot, int64_t barStart, int64_t barLength)
 {
-    lastDegree = progression.slots[(size_t) slot].degree.value;
+    lastDegree = activeProgression().slots[(size_t) slot].degree.value;
     rebuildPlanIfNeeded();
     const auto realization = slotPlan[(size_t) slot];
 
@@ -333,7 +375,7 @@ void EngineHost::scheduleSequencerSlot (int slot, int64_t barStart, int64_t barL
 std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()
 {
     std::vector<MidiExporter::ChordEvent> events;
-    events.reserve ((size_t) progression.size);
+    events.reserve ((size_t) activeProgression().size);
 
     const int64_t barLength = (int64_t) (sampleRate * 60.0 / tempoBpm * 4.0);
     const auto profile = buildProfile();
@@ -341,7 +383,7 @@ std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()
     std::array<ChordRealization, 4> plan;
     buildProgressionPlan (plan);
 
-    for (int slot = 0; slot < progression.size; ++slot)
+    for (int slot = 0; slot < activeProgression().size; ++slot)
     {
         const auto& realization = plan[(size_t) slot];
 
@@ -489,7 +531,7 @@ void EngineHost::processBlock (juce::MidiBuffer& out, int numSamples)
                 scheduleSequencerSlot (currentSlot, nextBarSample, barLength);
                 resumeAtNextBar = false;
             }
-            currentSlot = (currentSlot + 1) % progression.size;
+            currentSlot = (currentSlot + 1) % activeProgression().size;
             nextBarSample += barLength;
         }
 

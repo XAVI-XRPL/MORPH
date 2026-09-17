@@ -6,6 +6,7 @@
 #include "voicing/VoicingEngine.h"
 #include "performance/PerformanceEngine.h"
 #include "progression/Progression.h"
+#include "morph/MorphEngine.h"
 #include "../midi/MidiScheduler.h"
 #include "../midi/MidiExporter.h"
 #include "../state/MusicalPlaybackState.h"
@@ -60,6 +61,32 @@ public:
     void play();
     void stop();
 
+    // --- Composition editing (message thread; RT-safe swap to audio) ---
+
+    /** MORPH action (§30, §66): deterministic sibling of the progression,
+        locked slots preserved; also advances the voicing variation. */
+    void morphProgressionFromUi();
+
+    /** Toggle a slot's lock (§67). Locked slots never morph. */
+    void toggleSlotLockFromUi (int slot);
+
+    /** Replace the whole progression (undo/redo restore). */
+    void setProgressionFromUi (const Progression& p);
+
+    /** UI view of the active progression (message thread). */
+    Progression getProgressionForUi() const;
+
+    /** Voicing-variation counter (undo/redo + persistence). */
+    int getMorphVariation() const { return morphVariation.load (std::memory_order_relaxed); }
+    void setMorphVariation (int v)
+    {
+        morphVariation.store (v, std::memory_order_relaxed);
+        planDirty.store (true, std::memory_order_release);
+    }
+
+    /** Bumped on every progression swap (UI watches for changes). */
+    std::atomic<uint32_t> progressionVersion { 0 };
+
     /** Host tempo (audio thread, cheap). */
     void setTempoBpm (double bpm) { tempoBpm = bpm > 0.0 ? bpm : 80.0; }
 
@@ -73,7 +100,7 @@ public:
     // --- State ---
     PlaybackStateBuffer& stateBuffer() { return stateSnapshot; }
     const MusicalPlaybackState& audioState() const { return state; }
-    const Progression& getProgression() const { return progression; }
+    const Progression& getProgression() const { return activeProgression(); }
 
     /** Voice-leading memory threaded across realizations (M3). */
     struct VoiceLeadingMemory
@@ -115,7 +142,19 @@ private:
     HarmonyEngine harmony;
     VoicingEngine voicingEngine;
     StyleProfile style = StyleProfile::modernRnB();
-    Progression progression;
+    MorphEngine morphEngine;
+
+    // Progression double buffer: audio thread reads activeProgression(),
+    // message thread writes via setProgressionFromUi (copy → flip).
+    std::array<Progression, 2> progressionBuffers {};
+    std::atomic<int> progressionIndex { 0 };
+    std::atomic<bool> planDirty { false };
+    std::atomic<uint32_t> morphCounter { 0 };
+
+    const Progression& activeProgression() const
+    {
+        return progressionBuffers[(size_t) progressionIndex.load (std::memory_order_acquire)];
+    }
 
     MidiScheduler scheduler;
 

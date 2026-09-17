@@ -75,9 +75,11 @@ PluginEditor::PluginEditor (MorphAudioProcessor& p)
 
     // --- Radial field ---
     chassis.addAndMakeVisible (radialField);
-    radialField.setProgression (processor.engine.getProgression(),
-                                keyContextForMinorTonicIndex (0),
-                                StyleProfile::modernRnB());
+    radialField.onSlotLockToggle = [this] (int slot)
+    {
+        processor.engine.toggleSlotLockFromUi (slot);
+    };
+    refreshProgressionDisplay();
 
     // --- Action row ---
     actionRow.onSave = [this]
@@ -90,7 +92,33 @@ PluginEditor::PluginEditor (MorphAudioProcessor& p)
             xml->writeTo (dir.getChildFile ("morph-state.xml"));
         }
     };
-    actionRow.onMorph = [this] { processor.engine.requestMorphVariation(); };
+
+    // MORPH action (§30): undo checkpoint, then deterministic sibling.
+    actionRow.onMorph = [this]
+    {
+        undoHistory.checkpoint (currentComposition());
+        processor.engine.morphProgressionFromUi();
+        updateUndoRedoButtons();
+    };
+
+    // UNDO / REDO (§68): exact deterministic state restore.
+    actionRow.onUndo = [this]
+    {
+        if (undoHistory.canUndo())
+        {
+            applyComposition (undoHistory.undo (currentComposition()));
+            updateUndoRedoButtons();
+        }
+    };
+    actionRow.onRedo = [this]
+    {
+        if (undoHistory.canRedo())
+        {
+            applyComposition (undoHistory.redo (currentComposition()));
+            updateUndoRedoButtons();
+        }
+    };
+
     actionRow.onPlay = [this]
     {
         if (isPlaying)
@@ -100,8 +128,9 @@ PluginEditor::PluginEditor (MorphAudioProcessor& p)
     };
     actionRow.onExplore = [this] { showExplorePopover(); };
     actionRow.onMidi = [this] { exportMidi(); };
+    actionRow.onMidiDragStart = [this] { exportMidiToTempAndDrag(); };
     actionRow.onMore = [this] { showMorePopover(); };
-    actionRow.setUndoRedoEnabled (false, false); // M5
+    updateUndoRedoButtons();
     chassis.addAndMakeVisible (actionRow);
 
     // --- Keyboard ---
@@ -133,6 +162,13 @@ void PluginEditor::timerCallback()
     const auto snapshot = processor.engine.stateBuffer().read();
     keyboard.setState (snapshot);
     radialField.setState (snapshot);
+
+    const auto version = processor.engine.progressionVersion.load();
+    if (version != lastProgressionVersion)
+    {
+        lastProgressionVersion = version;
+        refreshProgressionDisplay();
+    }
 
     refreshKeyLabel();
 
@@ -209,16 +245,46 @@ void PluginEditor::showPerformanceMenu()
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&header), {});
 }
 
+void PluginEditor::applyPerformancePreset (const PerformancePreset& preset)
+{
+    auto setParam = [this] (const char* id, float plainValue)
+    {
+        if (auto* param = processor.apvts.getParameter (id))
+            param->setValueNotifyingHost (param->convertTo0to1 (plainValue));
+    };
+
+    setParam ("performanceMode", (float) preset.mode);
+    setParam ("togetherKind", (float) preset.togetherKind);
+    setParam ("strumSpread", preset.spreadMs);
+    setParam ("strumCurve", (float) preset.curve);
+    setParam ("strumVelShape", (float) preset.velocityShape);
+    setParam ("bassPolicy", (float) preset.bassPolicy);
+    setParam ("topPolicy", (float) preset.topPolicy);
+}
+
 void PluginEditor::showExplorePopover()
 {
     // EXPLORE (§32): deeper composition lives here, not on the main surface.
     juce::PopupMenu menu;
-    menu.addItem ("Progression alternatives", false, false, [] {});
-    menu.addItem ("Song Kit", false, false, [] {});
-    menu.addItem ("Performance presets", false, false, [] {});
-    menu.addItem ("Capture (last 60 s)", false, false, [] {});
+
+    menu.addItem ("New progression variation", true, false, [this]
+    {
+        undoHistory.checkpoint (currentComposition());
+        processor.engine.morphProgressionFromUi();
+        updateUndoRedoButtons();
+    });
+
+    // Performance presets (§58 curated set).
+    juce::PopupMenu presets;
+    for (int i = 0; i < numPerformancePresets; ++i)
+        presets.addItem (performancePresets[i].name, true, false,
+                         [this, i] { applyPerformancePreset (performancePresets[i]); });
+    menu.addSubMenu ("Performance presets", presets);
+
     menu.addSeparator();
-    menu.addItem ("Available in Milestones 5–9", false, false, [] {});
+    menu.addItem ("Song Kit", false, false, [] {});      // M9
+    menu.addItem ("Capture (last 60 s)", false, false, [] {}); // §80
+
     menu.setLookAndFeel (&lookAndFeel);
     menu.showMenuAsync (juce::PopupMenu::Options(), {});
 }
@@ -232,6 +298,43 @@ void PluginEditor::showMorePopover()
     menu.addItem ("MIDI channel: 1", false, false, [] {});
     menu.setLookAndFeel (&lookAndFeel);
     menu.showMenuAsync (juce::PopupMenu::Options(), {});
+}
+
+CompositionSnapshot PluginEditor::currentComposition() const
+{
+    return { processor.engine.getProgressionForUi(), processor.engine.getMorphVariation() };
+}
+
+void PluginEditor::applyComposition (const CompositionSnapshot& s)
+{
+    processor.engine.setProgressionFromUi (s.progression);
+    processor.engine.setMorphVariation (s.morphVariation);
+}
+
+void PluginEditor::updateUndoRedoButtons()
+{
+    actionRow.setUndoRedoEnabled (undoHistory.canUndo(), undoHistory.canRedo());
+}
+
+void PluginEditor::refreshProgressionDisplay()
+{
+    const int idx = (int) processor.apvts.getRawParameterValue ("keyIndex")->load();
+    radialField.setProgression (processor.engine.getProgressionForUi(),
+                                keyContextForMinorTonicIndex (idx),
+                                StyleProfile::modernRnB());
+}
+
+void PluginEditor::exportMidiToTempAndDrag()
+{
+    auto events = processor.engine.renderProgressionPerformance();
+    if (events.empty())
+        return;
+
+    auto file = MidiExporter::buildMidiFile (events, 48000.0, 80.0, (int64_t) (0.5 * 48000.0));
+    auto temp = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                    .getChildFile ("morph-progression.mid");
+    if (MidiExporter::writeToFile (file, temp))
+        performExternalDragDropOfFiles ({ temp.getFullPathName() }, true);
 }
 
 void PluginEditor::exportMidi()

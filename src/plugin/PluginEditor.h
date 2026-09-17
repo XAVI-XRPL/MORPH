@@ -1,6 +1,8 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "../state/UndoHistory.h"
+#include "../engine/styles/PerformancePresets.h"
 #include "../ui/design_system/MorphLookAndFeel.h"
 #include "../ui/MorphChassis.h"
 #include "../ui/header/MorphHeader.h"
@@ -16,7 +18,9 @@ namespace morph
  * MorphEditor: the canonical chassis layout (§8–§10, §29, §34).
  * All content lives on a 1440×900 design canvas, scaled to fit (§111).
  */
-class PluginEditor : public juce::AudioProcessorEditor, private juce::Timer
+class PluginEditor : public juce::AudioProcessorEditor,
+                     public juce::DragAndDropContainer,
+                     private juce::Timer
 {
 public:
     explicit PluginEditor (MorphAudioProcessor&);
@@ -35,8 +39,18 @@ private:
     void exportMidi();
     void refreshKeyLabel();
 
+    // M5 composition workflow
+    CompositionSnapshot currentComposition() const;
+    void applyComposition (const CompositionSnapshot& s);
+    void updateUndoRedoButtons();
+    void applyPerformancePreset (const PerformancePreset& preset);
+    void exportMidiToTempAndDrag();
+    void refreshProgressionDisplay();
+
     MorphAudioProcessor& processor;
     MorphLookAndFeel lookAndFeel;
+    UndoHistory undoHistory;
+    uint32_t lastProgressionVersion = 0;
 
     MorphChassis chassis; // scaled design canvas
 

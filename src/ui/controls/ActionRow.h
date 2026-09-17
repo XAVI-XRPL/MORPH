@@ -17,10 +17,12 @@ public:
     MorphActionButton (juce::String label, Glyph g, bool accent = false);
 
     std::function<void()> onClick;
+    std::function<void()> onDragStart; // MIDI drag-out (§33)
     void setPlaying (bool p); // PLAY toggles glyph play/stop
 
     void paint (juce::Graphics&) override;
-    void mouseDown (const juce::MouseEvent&) override { pressed = true; repaint(); }
+    void mouseDown (const juce::MouseEvent&) override { pressed = true; dragged = false; repaint(); }
+    void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
     void mouseEnter (const juce::MouseEvent&) override { hover = true; repaint(); }
     void mouseExit (const juce::MouseEvent&) override { hover = false; repaint(); }
@@ -34,6 +36,7 @@ private:
     Glyph glyph;
     bool accent;
     bool pressed = false, hover = false, playing = false, dimmed = false;
+    bool dragged = false;
 };
 
 /**
@@ -46,6 +49,7 @@ public:
     ActionRow();
 
     std::function<void()> onSave, onUndo, onRedo, onMorph, onPlay, onExplore, onMidi, onMore;
+    std::function<void()> onMidiDragStart;
 
     void setPlaying (bool p) { play.setPlaying (p); }
     void setUndoRedoEnabled (bool undo, bool redo);

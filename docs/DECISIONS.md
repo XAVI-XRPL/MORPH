@@ -123,3 +123,24 @@ slot 0 against slot 3) cached per settings signature (key/COLOR/SPACE/
 MOTION/variation). The sequencer and MIDI export render from identical
 plans, keeping export == playback. Top-line contour across the gold family:
 D4 → Eb4 → Eb4 → D4.
+
+## D19 — MORPH action = progression sibling (M5)
+The MORPH button now morphs the 4-slot progression (stylistic degree
+substitution tables, locked slots preserved, tonic anchor protected below
+0.75 morph amount, anti-stagnation guarantees ≥1 change) and advances the
+voicing variation. Deterministic: seed = morph counter; same seed + amount
+→ same sibling (§66, §93).
+
+## D20 — Progression state lives in an RT-safe double buffer
+Message thread writes a copy and flips an atomic index; audio thread reads
+the active buffer. A planDirty flag rebuilds the M3 voicing plan on the next
+block. Undo/redo = two-stack snapshots of {progression, morphVariation},
+message-thread only. Locks are slot state, not undoable actions.
+
+## D21 — Puck lock via right-click, minimal visual marker
+Locking keeps the main surface clean (§00): right-click a puck toggles its
+lock; a thin ring + pin dot marks locked slots. No new permanent controls.
+
+## D22 — Composition state persists inside the APVTS state tree
+Progression degrees/locks + morphVariation ride as ValueTree properties, so
+DAW session save/restore and the SAVE button both capture composition state.
