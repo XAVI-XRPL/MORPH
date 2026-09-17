@@ -1,0 +1,140 @@
+#pragma once
+
+#include "theory/KeyContext.h"
+#include "harmony/TriggerInterpreter.h"
+#include "harmony/HarmonyEngine.h"
+#include "voicing/VoicingEngine.h"
+#include "performance/PerformanceEngine.h"
+#include "progression/Progression.h"
+#include "../midi/MidiScheduler.h"
+#include "../midi/MidiExporter.h"
+#include "../state/MusicalPlaybackState.h"
+#include <atomic>
+
+namespace morph
+{
+
+/**
+ * EngineHost: the canonical engine pipeline (spec §43), audio-thread resident.
+ *
+ *   MIDI INPUT → TriggerInterpreter → KeyContext → HarmonyEngine
+ *   → VoicingEngine → ChordRealization → PerformanceEngine
+ *   → MidiScheduler → MusicalPlaybackState → MIDI OUTPUT
+ *
+ * All settings are atomics written by the message thread; the audio thread
+ * reads them lock-free. All engine work is bounded and allocation-free.
+ */
+class EngineHost
+{
+public:
+    EngineHost();
+
+    void prepare (double sampleRate, int maxBlockSize);
+
+    // --- Settings (message thread, atomic) ---
+    std::atomic<int> keyIndex { 0 };                          // 12 minor keys
+    std::atomic<int> performanceMode { (int) PerformanceMode::together };
+    std::atomic<int> togetherKind { (int) TogetherKind::tight };
+    std::atomic<int> strumCurve { (int) StrumCurve::human };
+    std::atomic<int> strumVelocityShape { (int) StrumVelocityShape::rise };
+    std::atomic<int> bassPolicy { (int) BassStrumPolicy::withStrum };
+    std::atomic<int> topVoicePolicy { (int) TopVoicePerformancePolicy::normal };
+    std::atomic<float> strumSpreadMs { 42.0f };
+
+    std::atomic<float> colorKnob { 0.5f };   // harmonic brightness
+    std::atomic<float> motionKnob { 0.5f };  // strum/performance movement
+    std::atomic<float> morphKnob { 0.5f };   // creative macro (M5)
+    std::atomic<float> spaceKnob { 0.4f };   // voicing openness
+    std::atomic<float> textureKnob { 0.2f }; // humanization amount
+    std::atomic<float> outputKnob { 0.75f }; // MIDI velocity baseline
+
+    /** UI requests a performance-mode change. If a chord is active, the SAME
+        realization is re-performed in the new mode (spec §112). */
+    void requestPerformanceMode (PerformanceMode mode);
+
+    /** MORPH action (M4 wiring; full MorphEngine is M5): selects the next
+        deterministic voicing sibling and re-performs the active chord. */
+    void requestMorphVariation();
+
+    /** Sequencer transport (message thread). */
+    void play();
+    void stop();
+
+    /** Host tempo (audio thread, cheap). */
+    void setTempoBpm (double bpm) { tempoBpm = bpm > 0.0 ? bpm : 80.0; }
+
+    // --- Audio-thread entry points (offsets relative to current block) ---
+    void noteOn (int inputPitch, float velocity, int64_t offsetWithinBlock);
+    void noteOff (int inputPitch, int64_t offsetWithinBlock);
+    void sustainPedal (bool down, int64_t offsetWithinBlock);
+
+    void processBlock (juce::MidiBuffer& out, int numSamples);
+
+    // --- State ---
+    PlaybackStateBuffer& stateBuffer() { return stateSnapshot; }
+    const MusicalPlaybackState& audioState() const { return state; }
+    const Progression& getProgression() const { return progression; }
+
+    /** Deterministic render of a slot degree (used by sequencer + export). */
+    ChordRealization realizeDegree (ScaleDegree degree, const Voicing* previous);
+
+    // --- Export (message thread only) ---
+    /** Renders the current progression's performance for MIDI export (§79). */
+    std::vector<MidiExporter::ChordEvent> renderProgressionPerformance();
+    /** Renders the most recent live chord performance for MIDI export. */
+    std::vector<MidiExporter::ChordEvent> renderCurrentChordPerformance();
+
+private:
+    PerformanceProfile buildProfile() const;
+    KeyContext currentKey() const;
+    void scheduleLive (const ChordRealization& r, int64_t originSample);
+    void scheduleSequencerSlot (int slot, int64_t barStart, int64_t barLength);
+    void updateGeneratedState (const ChordRealization& r, const ScheduledNoteList<maxChordVoices>& notes);
+    void clearIfSilent();
+
+    double sampleRate = 44100.0;
+    int blockSize = 512;
+
+    TriggerInterpreter interpreter;
+    HarmonyEngine harmony;
+    VoicingEngine voicingEngine;
+    StyleProfile style = StyleProfile::modernRnB();
+    Progression progression;
+
+    MidiScheduler scheduler;
+
+    // Live trigger (monophonic: latest input owns the live chord)
+    int liveInputPitch = -1;
+    int liveGroupId = -1;
+    ChordRealization lastRealization;
+    bool hasLastRealization = false;
+
+    // Mode re-performance
+    std::atomic<int> pendingMode { -1 };
+
+    // MORPH action (deterministic voicing sibling)
+    std::atomic<int> morphVariation { 0 };
+    std::atomic<bool> morphPending { false };
+    int lastDegree = 1;
+
+    // Sequencer
+    std::atomic<int> transportCommand { 0 }; // 0 none, 1 play, 2 stop
+    bool sequencerPlaying = false;
+    int64_t nextBarSample = 0;
+    int currentSlot = 0;
+    int sequencerGroupId = -1;
+    bool resumeAtNextBar = false;
+    double tempoBpm = 80.0;
+
+    // Strum progress tracking
+    int64_t activeGroupOrigin = 0;
+    int64_t activeSpreadSamples = 1;
+    int activeGroupNoteCount = 0;
+
+    MusicalPlaybackState state;
+    PlaybackStateBuffer stateSnapshot;
+
+    uint32_t triggerCounter = 0;
+};
+
+} // namespace morph
