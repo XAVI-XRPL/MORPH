@@ -9,7 +9,7 @@ ctest --test-dir build --output-on-failure
 ./build/MorphTests_artefacts/Release/MorphTests
 ```
 
-Current: **42 suites, ~2400 checks, all passing.**
+Current: **59 suites, ~2600 checks, all passing.**
 
 ## Harness
 
@@ -49,6 +49,19 @@ export timing == scheduling (tick-level), exported strum order.
 **keyboard/** — accidental classes == {1,3,6,8,10}, no black key between
 E/F or B/C, 2+3 grouping per octave, ascending MIDI order + count, exact
 pitch highlighting (C2 G2 Bb3 D4 Eb4 light; other octaves do not).
+
+**bass/** — root/flow/pedal/bounce profiles, register discipline [36..47],
+smoothest-chord-tone flow with anti-parking step motion.
+
+**topline/** — stepwise preference, repetition anchoring, register bounds,
+not-highestChordTone (§51), determinism.
+
+**voiceLeading/** — context-led second chord moves less than naive;
+gold-family connectivity bounds (movement ≤ 26, top leaps ≤ 7); deterministic
+sequences.
+
+**progression/** — 4-slot plan validity/determinism/identities, export ==
+plan playback, melodic-bass-and-top-contour acceptance guard.
 
 **integration/** — `golden.pressC3ProducesCm9` (full §105 truth: chord,
 roman, roles, state), `golden.sameChordAcrossPerformanceModes` (§96

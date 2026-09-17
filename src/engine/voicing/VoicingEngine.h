@@ -3,40 +3,55 @@
 #include "Voicing.h"
 #include "../theory/KeyContext.h"
 #include "../harmony/StyleProfile.h"
+#include "../bass/BassEngine.h"
+#include "../topline/TopVoiceEngine.h"
 
 namespace morph
 {
 
+/** Sequence context for voice leading (previous chord memory). */
+struct VoicingContext
+{
+    const Voicing* previous = nullptr;
+    MidiPitch previousBass { -1 };
+    bool hasPreviousBass = false;
+    MidiPitch previousTop { -1 };
+    bool hasPreviousTop = false;
+    int previousTopDirection = 0;   // -1 falling, 0 static, +1 rising
+    int slotIndex = 0;              // progression position (bass bounce)
+    float motion = 0.5f;            // MOTION knob
+    float openness = 0.4f;          // SPACE knob
+    PitchClass tonalCenter { 0 };
+};
+
 /**
- * VoicingEngine: chord identity → physical voicing.
- * Chord != voicing. Deterministic register-band recipe with
- * top-voice continuity against the previous voicing.
+ * VoicingEngine (§48): chord identity → physical voicing.
  *
- * Register plan (golden family, bass octave 2):
- *   bass        root            [36..47]
- *   low inner   5th (or b5)     bass + 7
- *   mid inner   7th             octave 3 (48+pc)
- *   high inner  9th / 11th      octave 4 (60+pc)
- *   top         3rd / 4th       octave 4, above 9th
+ * M3: candidate generation + scoring. Bass options come from BassEngine,
+ * top options from TopVoiceEngine, inner voices fill register bands.
+ * Candidates are scored for voice movement, common tones, leaps, crossing,
+ * register, spacing, low-end cleanliness, bass quality, top-line quality.
  *
- * Low-end cleanliness: single bass below MIDI 48; inner voices stay
- * at or above bass + 5 semitones.
+ * With no previous context, the canonical register-band recipe is used
+ * (golden Cm9 = C2 G2 Bb3 D4 Eb4 preserved).
+ *
+ * Stateless: safe to call from any thread with independent arguments.
  */
 class VoicingEngine
 {
 public:
-    /**
-     * @param openness  SPACE knob 0..1 (close → open).
-     * @param variation Deterministic voicing-sibling selector (MORPH action;
-     *                  0 = canonical). Same chord identity, different shape.
-     * Stateless: safe to call from any thread with independent arguments.
-     */
     ChordRealization realize (const ChordCandidate& candidate,
                               const KeyContext& key,
                               const StyleProfile& style,
-                              const Voicing* previous,
-                              float openness,
+                              const VoicingContext& context,
                               int variation = 0) const;
+
+    /** Deterministic voicing sibling transform (MORPH action, pre-M5). */
+    static void applyVariation (Voicing& v, int variation);
+
+private:
+    BassEngine bassEngine;
+    TopVoiceEngine topVoiceEngine;
 };
 
 } // namespace morph

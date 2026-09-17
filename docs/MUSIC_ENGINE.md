@@ -42,19 +42,37 @@ M6 territory.
 
 ## VoicingEngine (§48, §49)
 
-Register-band recipe (DECISIONS D9), deterministic and stateless
-(`realize(candidate, key, style, previous, openness, variation)`):
+M3: candidate generation + voice-leading scoring (D15). Stateless
+(`realize(candidate, key, style, VoicingContext, variation)`).
 
-- **Bass**: root in octave 2 ([36..47]); single bass only (§49).
-- **Low inner**: 5th (or b5) a fifth above the bass.
-- **Mid inner**: 7th placed in octave 3, kept above the low inner.
-- **High inner**: 9th (then 11th) in octave 4.
-- **Top**: 3rd (4th for sus) above everything — the melodic identity.
-- **Top-voice continuity**: octave-folded toward the previous top when musically
-  legal (sequence coherence; full candidate scoring is M3).
-- **SPACE openness**: >0.66 lifts 9th+top an octave; <0.33 tightens the top.
-- **Morph variation** (interim MORPH action, D13): deterministic siblings —
-  v1 top +12, v2 upper structure +12, v3 seventh drops an octave.
+- **No context** → canonical register-band recipe (golden Cm9 preserved):
+  bass root octave 2, 5th above bass, 7th in octave 3, 9th/11th in octave 4,
+  3rd/4th on top.
+- **With context** → candidates over (bass × top): bass from **BassEngine**
+  (root/flow/pedal/bounce, anti-parking flow, register [36..47]), top from
+  **TopVoiceEngine** (melody register [60..76], stepwise + repetition +
+  controlled leaps + contour memory). Inner voices fill the register bands.
+- **Scoring** (§48): total voice movement (nearest-neighbor), common-tone
+  bonus, large-leap penalty, register and spacing discipline, bass quality
+  (stepwise + root bonus), top-line quality (weighted ×2). Crossing and
+  low-end violations are structurally impossible by construction (§49).
+- **Voice-leading memory** resets on full silence (D16) — a new phrase
+  starts canonical.
+- **SPACE openness** and **morph variation** apply as before (D13).
+
+## Sequence plan (M3, §48/§64)
+
+`EngineHost::buildProgressionPlan` realizes the 4 slots forward with
+threaded voice-leading memory, then loop-closes slot 0 against slot 3.
+Cached per settings signature; the sequencer and MIDI export render from
+identical plans (export == playback). Gold family plan:
+
+| Slot | Chord | Bass | Top |
+|---|---|---|---|
+| 1 | Cm9 | C2 | D4 |
+| 2 | Abmaj9 | Eb2 | Eb4 |
+| 3 | Fm9 | F2 | Eb4 |
+| 4 | G7sus | G2 | D4 |
 
 Golden verification: degree 1 in C minor → C2 G2 Bb3 D4 Eb4 exactly
 (`voicing.goldenCm9Realization`).

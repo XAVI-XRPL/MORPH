@@ -14,9 +14,11 @@ MORPH_TEST (voicing, morphVariationPreservesIdentity)
 
     const auto candidate = harmony.chordForDegree (key, ScaleDegree { 1 }, style, 0.5f);
 
-    const auto canonical = voicing.realize (candidate, key, style, nullptr, 0.4f, 0);
-    const auto sibling1 = voicing.realize (candidate, key, style, nullptr, 0.4f, 1);
-    const auto sibling2 = voicing.realize (candidate, key, style, nullptr, 0.4f, 2);
+    VoicingContext ctx;
+    ctx.openness = 0.4f;
+    const auto canonical = voicing.realize (candidate, key, style, ctx, 0);
+    const auto sibling1 = voicing.realize (candidate, key, style, ctx, 1);
+    const auto sibling2 = voicing.realize (candidate, key, style, ctx, 2);
 
     // Identity preserved.
     CHECK (sibling1.candidate.chord == canonical.candidate.chord);
@@ -42,7 +44,7 @@ MORPH_TEST (voicing, morphVariationPreservesIdentity)
     CHECK (differs2);
 
     // Deterministic: same inputs → identical sibling.
-    const auto again = voicing.realize (candidate, key, style, nullptr, 0.4f, 1);
+    const auto again = voicing.realize (candidate, key, style, ctx, 1);
     CHECK (again.topPitch == sibling1.topPitch);
     CHECK (again.bassPitch == sibling1.bassPitch);
 }

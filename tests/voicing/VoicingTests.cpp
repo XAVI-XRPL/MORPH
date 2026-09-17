@@ -13,7 +13,17 @@ namespace
         HarmonyEngine harmony;
         VoicingEngine voicing;
         const auto candidate = harmony.chordForDegree (key, ScaleDegree { degree }, style, color);
-        return voicing.realize (candidate, key, style, prev, 0.4f);
+        VoicingContext ctx;
+        ctx.openness = 0.4f;
+        if (prev != nullptr && prev->count > 0)
+        {
+            ctx.previous = prev;
+            ctx.hasPreviousBass = true;
+            ctx.previousBass = prev->lowest();
+            ctx.hasPreviousTop = true;
+            ctx.previousTop = prev->highest();
+        }
+        return voicing.realize (candidate, key, style, ctx, 0);
     }
 }
 
@@ -59,7 +69,17 @@ MORPH_TEST (voicing, goldProgressionFamily)
     {
         const int degree = slot == 0 ? 1 : slot == 1 ? 6 : slot == 2 ? 4 : 5;
         const auto candidate = harmony.chordForDegree (key, ScaleDegree { degree }, style, 0.5f);
-        const auto r = voicing.realize (candidate, key, style, prevPtr, 0.4f);
+        VoicingContext ctx;
+        ctx.openness = 0.4f;
+        if (prevPtr != nullptr && prevPtr->count > 0)
+        {
+            ctx.previous = prevPtr;
+            ctx.hasPreviousBass = true;
+            ctx.previousBass = prevPtr->lowest();
+            ctx.hasPreviousTop = true;
+            ctx.previousTop = prevPtr->highest();
+        }
+        const auto r = voicing.realize (candidate, key, style, ctx, 0);
 
         CHECK (r.valid);
         CHECK (chordSymbolToString (r.candidate.chord, true) == juce::String (expected[slot]));
@@ -101,8 +121,10 @@ MORPH_TEST (voicing, spaceKnobOpensVoicing)
     const auto candidate = harmony.chordForDegree (key, ScaleDegree { 1 }, style, 0.5f);
 
     VoicingEngine voicing;
-    const auto closedR = voicing.realize (candidate, key, style, nullptr, 0.1f);
-    const auto openR = voicing.realize (candidate, key, style, nullptr, 0.9f);
+    VoicingContext closedCtx; closedCtx.openness = 0.1f;
+    VoicingContext openCtx;   openCtx.openness = 0.9f;
+    const auto closedR = voicing.realize (candidate, key, style, closedCtx, 0);
+    const auto openR = voicing.realize (candidate, key, style, openCtx, 0);
 
     const int closedSpan = closedR.topPitch.value - closedR.bassPitch.value;
     const int openSpan = openR.topPitch.value - openR.bassPitch.value;

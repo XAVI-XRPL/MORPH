@@ -94,3 +94,32 @@ vocabulary. Major keys arrive with the style expansion milestone.
 Export re-runs the same deterministic engine pipeline per progression slot
 (same seeds as the sequencer) instead of capturing live MIDI. Timing equals
 heard scheduling (tested, §91) and export works before anything was played.
+
+## D15 — M3: VoicingEngine = candidate generation + weighted scoring
+Register-band recipe remains the canonical no-context path (golden Cm9 is
+unchanged); with previous-chord context the engine generates
+(bass-choice × top-choice) candidates — bass from BassEngine, top from
+TopVoiceEngine — and scores them for voice movement, common tones, leaps,
+crossing, register, spacing, low-end cleanliness, bass quality and top-line
+quality (§48). Stateless call signature: realize(candidate, key, style,
+VoicingContext, variation).
+
+## D16 — Voice-leading memory resets on silence
+Voice leading applies within a connected phrase only: when nothing sounds
+and nothing is held, `vlMemory` resets and the next chord starts canonical.
+Prevents a dead chord from dragging the next phrase around (and keeps the
+M2 golden-modes test honest).
+
+## D17 — Flow bass never parks on a non-root
+Flow minimizes bass movement among root/third/fifth in [36..47], but if the
+winner would hold the previous pitch while that pitch is not the new chord's
+root, it moves by step instead (§50: bass is melodic). Gold family result:
+C2 → Eb2 → F2 → G2 — stepwise into the dominant. Pedal and bounce profiles
+exist; motion maps still→root, mid→flow, moving→bounce.
+
+## D18 — Sequence-level voicing plan for the 4-slot loop
+PLAY builds a 4-slot plan (forward voice-leading pass + loop-closure pass on
+slot 0 against slot 3) cached per settings signature (key/COLOR/SPACE/
+MOTION/variation). The sequencer and MIDI export render from identical
+plans, keeping export == playback. Top-line contour across the gold family:
+D4 → Eb4 → Eb4 → D4.

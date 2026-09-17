@@ -25,6 +25,8 @@ set(MORPH_ENGINE_SOURCES
     src/engine/harmony/HarmonyEngine.cpp
     src/engine/harmony/StyleProfile.cpp
     src/engine/voicing/VoicingEngine.cpp
+    src/engine/bass/BassEngine.cpp
+    src/engine/topline/TopVoiceEngine.cpp
     src/engine/progression/Progression.cpp
     src/engine/performance/PerformanceEngine.cpp
     src/engine/EngineHost.cpp
@@ -102,6 +104,11 @@ target_sources(MorphTests PRIVATE
     tests/harmony/HarmonyTests.cpp
     tests/voicing/VoicingTests.cpp
     tests/voicing/MorphVariationTests.cpp
+    tests/voicing/VoiceLeadingTests.cpp
+    tests/bass/BassEngineTests.cpp
+    tests/topline/TopVoiceEngineTests.cpp
+    tests/progression/ProgressionPlanTests.cpp
+    tests/progression/PlanDumpTests.cpp
     tests/performance/PerformanceTests.cpp
     tests/midi/MidiSchedulerTests.cpp
     tests/midi/MidiExportTests.cpp

@@ -75,8 +75,24 @@ public:
     const MusicalPlaybackState& audioState() const { return state; }
     const Progression& getProgression() const { return progression; }
 
+    /** Voice-leading memory threaded across realizations (M3). */
+    struct VoiceLeadingMemory
+    {
+        bool valid = false;
+        Voicing voicing {};
+        int bass = -1;
+        int top = -1;
+        int topDirection = 0; // -1 falling, 0 static, +1 rising
+    };
+
     /** Deterministic render of a slot degree (used by sequencer + export). */
-    ChordRealization realizeDegree (ScaleDegree degree, const Voicing* previous);
+    ChordRealization realizeDegree (ScaleDegree degree, const VoiceLeadingMemory& mem,
+                                    int slotIndex) const;
+
+    /** Builds the 4-slot voicing plan (sequence-level optimization, §48):
+        forward pass threading voice-leading memory, then a loop-closure pass
+        on slot 0 against slot 3. Stateless — safe on any thread. */
+    void buildProgressionPlan (std::array<ChordRealization, 4>& out) const;
 
     // --- Export (message thread only) ---
     /** Renders the current progression's performance for MIDI export (§79). */
@@ -108,6 +124,14 @@ private:
     int liveGroupId = -1;
     ChordRealization lastRealization;
     bool hasLastRealization = false;
+    VoiceLeadingMemory vlMemory;
+
+    // Sequence-level voicing plan for progression playback (audio thread)
+    std::array<ChordRealization, 4> slotPlan {};
+    bool planValid = false;
+    uint64_t planSignature = 0;
+    uint64_t computePlanSignature() const;
+    void rebuildPlanIfNeeded();
 
     // Mode re-performance
     std::atomic<int> pendingMode { -1 };

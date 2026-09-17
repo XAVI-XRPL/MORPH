@@ -51,14 +51,81 @@ PerformanceProfile EngineHost::buildProfile() const
     return p;
 }
 
-ChordRealization EngineHost::realizeDegree (ScaleDegree degree, const Voicing* previous)
+namespace
+{
+    void advanceMemory (EngineHost::VoiceLeadingMemory& mem, const ChordRealization& r)
+    {
+        const int prevTop = mem.top;
+        mem.valid = true;
+        mem.voicing = r.voicing;
+        mem.bass = r.bassPitch.value;
+        mem.top = r.topPitch.value;
+        mem.topDirection = prevTop < 0 ? 0
+                        : r.topPitch.value > prevTop ? 1
+                        : r.topPitch.value < prevTop ? -1 : 0;
+    }
+}
+
+ChordRealization EngineHost::realizeDegree (ScaleDegree degree, const VoiceLeadingMemory& mem,
+                                            int slotIndex) const
 {
     const auto key = currentKey();
     const auto candidate = harmony.chordForDegree (key, degree, style,
                                                    colorKnob.load (std::memory_order_relaxed));
-    return voicingEngine.realize (candidate, key, style, previous,
-                                  spaceKnob.load (std::memory_order_relaxed),
+
+    VoicingContext ctx;
+    if (mem.valid)
+    {
+        ctx.previous = &mem.voicing;
+        ctx.previousBass = MidiPitch { mem.bass };
+        ctx.hasPreviousBass = true;
+        ctx.previousTop = MidiPitch { mem.top };
+        ctx.hasPreviousTop = true;
+        ctx.previousTopDirection = mem.topDirection;
+    }
+    ctx.slotIndex = slotIndex;
+    ctx.motion = motionKnob.load (std::memory_order_relaxed);
+    ctx.openness = spaceKnob.load (std::memory_order_relaxed);
+    ctx.tonalCenter = key.tonic;
+
+    return voicingEngine.realize (candidate, key, style, ctx,
                                   morphVariation.load (std::memory_order_relaxed));
+}
+
+void EngineHost::buildProgressionPlan (std::array<ChordRealization, 4>& out) const
+{
+    VoiceLeadingMemory mem;
+    for (int i = 0; i < progression.size; ++i)
+    {
+        out[(size_t) i] = realizeDegree (progression.slots[(size_t) i].degree, mem, i);
+        advanceMemory (mem, out[(size_t) i]);
+    }
+
+    // Loop closure: re-realize slot 0 against slot 3 so the wrap is smooth.
+    auto closed = realizeDegree (progression.slots[0].degree, mem, 0);
+    if (closed.valid)
+        out[0] = closed;
+}
+
+uint64_t EngineHost::computePlanSignature() const
+{
+    auto q = [] (float f) { return (uint64_t) (f * 100.0f); };
+    return (uint64_t) (unsigned) keyIndex.load (std::memory_order_relaxed)
+         ^ (q (colorKnob.load (std::memory_order_relaxed)) << 8)
+         ^ (q (spaceKnob.load (std::memory_order_relaxed)) << 20)
+         ^ (q (motionKnob.load (std::memory_order_relaxed)) << 32)
+         ^ ((uint64_t) (morphVariation.load (std::memory_order_relaxed) & 0xFFFF) << 44);
+}
+
+void EngineHost::rebuildPlanIfNeeded()
+{
+    const auto sig = computePlanSignature();
+    if (! planValid || sig != planSignature)
+    {
+        buildProgressionPlan (slotPlan);
+        planSignature = sig;
+        planValid = true;
+    }
 }
 
 void EngineHost::updateGeneratedState (const ChordRealization& r,
@@ -155,6 +222,7 @@ void EngineHost::scheduleLive (const ChordRealization& r, int64_t originSample)
     updateGeneratedState (r, notes);
     lastRealization = r;
     hasLastRealization = true;
+    advanceMemory (vlMemory, r);
     ++triggerCounter;
 }
 
@@ -169,8 +237,7 @@ void EngineHost::noteOn (int inputPitch, float velocity, int64_t offsetWithinBlo
     const auto result = interpreter.interpret (MidiPitch { inputPitch }, key);
     lastDegree = result.degree.value;
 
-    const Voicing* previous = hasLastRealization ? &lastRealization.voicing : nullptr;
-    auto realization = realizeDegree (result.degree, previous);
+    auto realization = realizeDegree (result.degree, vlMemory, 0);
 
     liveInputPitch = inputPitch;
     state.inputNotes.set ((size_t) inputPitch);
@@ -232,10 +299,9 @@ void EngineHost::stop()  { transportCommand.store (2, std::memory_order_relaxed)
 
 void EngineHost::scheduleSequencerSlot (int slot, int64_t barStart, int64_t barLength)
 {
-    const auto& s = progression.slots[(size_t) slot];
-    lastDegree = s.degree.value;
-    const Voicing* previous = hasLastRealization ? &lastRealization.voicing : nullptr;
-    auto realization = realizeDegree (s.degree, previous);
+    lastDegree = progression.slots[(size_t) slot].degree.value;
+    rebuildPlanIfNeeded();
+    const auto realization = slotPlan[(size_t) slot];
 
     const auto profile = buildProfile();
     auto notes = PerformanceEngine::schedule (realization, profile, sampleRate,
@@ -261,6 +327,7 @@ void EngineHost::scheduleSequencerSlot (int slot, int64_t barStart, int64_t barL
     updateGeneratedState (realization, notes);
     lastRealization = realization;
     hasLastRealization = true;
+    advanceMemory (vlMemory, realization);
 }
 
 std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()
@@ -271,12 +338,12 @@ std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()
     const int64_t barLength = (int64_t) (sampleRate * 60.0 / tempoBpm * 4.0);
     const auto profile = buildProfile();
 
-    Voicing prev {};
-    const Voicing* prevPtr = nullptr;
+    std::array<ChordRealization, 4> plan;
+    buildProgressionPlan (plan);
 
     for (int slot = 0; slot < progression.size; ++slot)
     {
-        auto realization = realizeDegree (progression.slots[(size_t) slot].degree, prevPtr);
+        const auto& realization = plan[(size_t) slot];
 
         MidiExporter::ChordEvent ev;
         ev.startSample = (int64_t) slot * barLength;
@@ -284,9 +351,6 @@ std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()
                                                 barLength - (int64_t) (0.02 * sampleRate),
                                                 0x51ED270Bu ^ ((uint32_t) slot * 144665u));
         events.push_back (ev);
-
-        prev = realization.voicing;
-        prevPtr = &prev;
     }
 
     return events;
@@ -319,6 +383,10 @@ void EngineHost::clearIfSilent()
         liveGroupId = -1;
         liveInputPitch = -1;
         state.isLiveOverride = false;
+
+        // A new phrase after full silence starts from the canonical voicing —
+        // voice leading only applies within a connected phrase.
+        vlMemory = VoiceLeadingMemory {};
     }
 }
 
@@ -382,8 +450,7 @@ void EngineHost::processBlock (juce::MidiBuffer& out, int numSamples)
     {
         if (hasLastRealization)
         {
-            auto varied = realizeDegree (ScaleDegree { lastDegree },
-                                         &lastRealization.voicing);
+            auto varied = realizeDegree (ScaleDegree { lastDegree }, vlMemory, 0);
 
             if (liveGroupId > 0)
             {

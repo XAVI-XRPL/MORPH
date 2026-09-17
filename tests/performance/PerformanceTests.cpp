@@ -16,7 +16,9 @@ namespace
         HarmonyEngine harmony;
         VoicingEngine voicing;
         const auto candidate = harmony.chordForDegree (key, ScaleDegree { 1 }, style, 0.5f);
-        return voicing.realize (candidate, key, style, nullptr, 0.4f);
+        VoicingContext ctx;
+        ctx.openness = 0.4f;
+        return voicing.realize (candidate, key, style, ctx, 0);
     }
 
     PerformanceProfile togetherProfile()
