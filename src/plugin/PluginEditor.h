@@ -51,6 +51,8 @@ private:
     MorphLookAndFeel lookAndFeel;
     UndoHistory undoHistory;
     uint32_t lastProgressionVersion = 0;
+    int lastStyleIndex = 0;
+    int lastKeyIndex = 0;
 
     MorphChassis chassis; // scaled design canvas
 

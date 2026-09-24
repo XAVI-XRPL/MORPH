@@ -30,8 +30,28 @@ PerformanceProfile EngineHost::buildProfile() const
     const float motion = motionKnob.load (std::memory_order_relaxed);
     const float motionScale = 1.3f - 0.6f * motion;
 
-    p.strum.direction = (p.mode == PerformanceMode::strumDown) ? StrumDirection::down
-                                                               : StrumDirection::up;
+    // Strum direction: the setting wins; STRUM↓ with no explicit setting = down.
+    {
+        const int dirSetting = strumDirectionSetting.load (std::memory_order_relaxed);
+        p.strum.direction = (p.mode == PerformanceMode::strumDown
+                             && dirSetting == (int) StrumDirection::up)
+                                ? StrumDirection::down
+                                : (StrumDirection) dirSetting;
+    }
+
+    // M8 stream profiles. TEXTURE adds swing/humanization; MOTION widens arp.
+    {
+        const float texture = textureKnob.load (std::memory_order_relaxed);
+        const float motion = motionKnob.load (std::memory_order_relaxed);
+        p.pulse.rate = (StreamRate) streamRate.load (std::memory_order_relaxed);
+        p.pulse.swing = texture * 0.25f;
+        p.pulse.accentEvery = 4;
+        p.pulse.bassHold = motion < 0.4f;
+        p.arp.rate = p.pulse.rate;
+        p.arp.direction = (ArpDirection) arpDirectionSetting.load (std::memory_order_relaxed);
+        p.arp.octaves = motion > 0.66f ? 2 : 1;
+        p.pattern = (PatternKind) patternKindSetting.load (std::memory_order_relaxed);
+    }
     p.strum.spreadMs = strumSpreadMs.load (std::memory_order_relaxed) * motionScale;
     p.strum.curve = (StrumCurve) strumCurve.load (std::memory_order_relaxed);
     p.strum.velocityShape = (StrumVelocityShape) strumVelocityShape.load (std::memory_order_relaxed);
@@ -200,9 +220,29 @@ void EngineHost::updateGeneratedState (const ChordRealization& r,
 
 void EngineHost::scheduleLive (const ChordRealization& r, int64_t originSample)
 {
+    // A stream (pulse/pattern/arp) is always stopped before new scheduling.
+    if (stream.active)
+        stopStream (originSample);
+
     const auto profile = buildProfile();
-    auto notes = PerformanceEngine::schedule (r, profile, sampleRate, -1,
-                                              0x9E3779B9u ^ (triggerCounter * 2654435761u));
+    const uint32_t seed = 0x9E3779B9u ^ (triggerCounter * 2654435761u);
+
+    if (isStreamMode (profile.mode))
+    {
+        startStream (r, originSample, -1, seed);
+        liveGroupId = stream.groupId;
+
+        state.strumDirection = StrumDirection::up;
+        state.performanceMode = profile.mode;
+        updateGeneratedState (r, PerformanceEngine::schedule (r, profile, sampleRate, -1, seed));
+        lastRealization = r;
+        hasLastRealization = true;
+        advanceVoiceLeadingMemory (vlMemory, r);
+        ++triggerCounter;
+        return;
+    }
+
+    auto notes = PerformanceEngine::schedule (r, profile, sampleRate, -1, seed);
 
     // Retrigger semantics (spec §61): cancel obsolete pending attacks,
     // release irrelevant notes, preserve common tones, avoid duplicates.
@@ -303,7 +343,10 @@ void EngineHost::noteOff (int inputPitch, int64_t offsetWithinBlock)
     if (inputPitch == liveInputPitch && liveGroupId > 0)
     {
         // Release-before-strum-end policy: CANCEL_PENDING_ATTACKS (spec §60).
-        scheduler.releaseGroup (liveGroupId, scheduler.getClock() + offsetWithinBlock);
+        if (stream.active)
+            stopStream (scheduler.getClock() + offsetWithinBlock);
+        else
+            scheduler.releaseGroup (liveGroupId, scheduler.getClock() + offsetWithinBlock);
         liveGroupId = -1;
         liveInputPitch = -1;
 
@@ -342,9 +385,35 @@ void EngineHost::scheduleSequencerSlot (int slot, int64_t barStart, int64_t barL
     const auto realization = slotPlan[(size_t) slot];
 
     const auto profile = buildProfile();
+    const uint32_t slotSeed = 0x51ED270Bu ^ ((uint32_t) slot * 144665u);
+
+    if (isStreamMode (profile.mode))
+    {
+        if (sequencerGroupId > 0)
+            scheduler.releaseGroup (sequencerGroupId, barStart);
+        if (stream.active)
+            stopStream (barStart);
+
+        startStream (realization, barStart, barStart + barLength, slotSeed);
+        sequencerGroupId = stream.groupId;
+
+        auto notes = PerformanceEngine::schedule (realization, profile, sampleRate, -1, slotSeed);
+        activeGroupOrigin = barStart;
+        activeSpreadSamples = std::max<int64_t> (1, barLength);
+        activeGroupNoteCount = notes.count;
+        state.activeProgressionSlot = slot;
+        state.strumDirection = StrumDirection::up;
+        state.performanceMode = profile.mode;
+        updateGeneratedState (realization, notes);
+        lastRealization = realization;
+        hasLastRealization = true;
+        advanceVoiceLeadingMemory (vlMemory, realization);
+        return;
+    }
+
     auto notes = PerformanceEngine::schedule (realization, profile, sampleRate,
                                               barLength - (int64_t) (0.02 * sampleRate),
-                                              0x51ED270Bu ^ ((uint32_t) slot * 144665u));
+                                              slotSeed);
 
     if (sequencerGroupId > 0)
         scheduler.releaseGroup (sequencerGroupId, barStart);
@@ -382,12 +451,29 @@ std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()
     for (int slot = 0; slot < activeProgression().size; ++slot)
     {
         const auto& realization = plan[(size_t) slot];
+        const uint32_t slotSeed = 0x51ED270Bu ^ ((uint32_t) slot * 144665u);
 
         MidiExporter::ChordEvent ev;
         ev.startSample = (int64_t) slot * barLength;
-        ev.notes = PerformanceEngine::schedule (realization, profile, sampleRate,
-                                                barLength - (int64_t) (0.02 * sampleRate),
-                                                0x51ED270Bu ^ ((uint32_t) slot * 144665u));
+
+        if (isStreamMode (profile.mode))
+        {
+            StreamContext ctx;
+            ctx.realization = realization;
+            ctx.profile = profile;
+            ctx.sampleRate = sampleRate;
+            ctx.bpm = tempoBpm;
+            ctx.seed = slotSeed;
+            ctx.streamStartSample = ev.startSample;
+            PatternEngine::generateWindow (ctx, ev.startSample, ev.startSample + barLength,
+                                           ev.notes);
+        }
+        else
+        {
+            ev.notes.assignFrom (PerformanceEngine::schedule (realization, profile, sampleRate,
+                                                              barLength - (int64_t) (0.02 * sampleRate),
+                                                              slotSeed));
+        }
         events.push_back (ev);
     }
 
@@ -402,12 +488,109 @@ std::vector<MidiExporter::ChordEvent> EngineHost::renderCurrentChordPerformance(
         return events;
 
     const int64_t barLength = (int64_t) (sampleRate * 60.0 / tempoBpm * 4.0);
+    const auto profile = buildProfile();
+
     MidiExporter::ChordEvent ev;
     ev.startSample = 0;
-    ev.notes = PerformanceEngine::schedule (lastRealization, buildProfile(), sampleRate,
-                                            barLength, 0x9E3779B9u);
+
+    if (isStreamMode (profile.mode))
+    {
+        StreamContext ctx;
+        ctx.realization = lastRealization;
+        ctx.profile = profile;
+        ctx.sampleRate = sampleRate;
+        ctx.bpm = tempoBpm;
+        ctx.seed = 0x9E3779B9u;
+        ctx.streamStartSample = 0;
+        PatternEngine::generateWindow (ctx, 0, barLength, ev.notes);
+    }
+    else
+    {
+        ev.notes.assignFrom (PerformanceEngine::schedule (lastRealization, profile, sampleRate,
+                                                          barLength, 0x9E3779B9u));
+    }
     events.push_back (ev);
     return events;
+}
+
+//==============================================================================
+// M8 streams
+
+void EngineHost::scheduleHeldAnchor (int pitch, int vel, int64_t origin, int64_t end, VoiceRole role)
+{
+    ScheduledNoteList<maxChordVoices> list;
+    ScheduledNote n;
+    n.pitch = pitch;
+    n.velocity = vel;
+    n.noteOnSampleOffset = 0;
+    n.noteOffSampleOffset = end >= 0 ? end - origin : -1;
+    n.role = role;
+    list.add (n);
+    scheduler.scheduleIntoGroup (stream.groupId, list, origin);
+}
+
+void EngineHost::startStream (const ChordRealization& r, int64_t origin, int64_t end, uint32_t seed)
+{
+    stream.active = true;
+    stream.startSample = origin;
+    stream.endSample = end;
+    stream.generatedUntil = origin;
+    stream.seed = seed;
+    stream.realization = r;
+    stream.profile = buildProfile();
+    stream.groupId = scheduler.allocateGroup();
+
+    // Held anchors for bass-hold pulse / top-hold arp.
+    if (stream.profile.mode == PerformanceMode::pulse && stream.profile.pulse.bassHold)
+        scheduleHeldAnchor (r.bassPitch.value, stream.profile.velocityBaseline - 4,
+                            origin, end, VoiceRole::bass);
+    if (stream.profile.mode == PerformanceMode::arp && stream.profile.arp.topHold)
+        scheduleHeldAnchor (r.topPitch.value, stream.profile.velocityBaseline + 6,
+                            origin, end, VoiceRole::top);
+}
+
+void EngineHost::pumpStream (int64_t blockEnd)
+{
+    if (! stream.active)
+        return;
+
+    const int64_t clock = scheduler.getClock();
+    const int64_t windowStart = std::max (stream.generatedUntil, clock);
+    int64_t windowEnd = blockEnd + blockSize; // one-block lookahead
+
+    if (stream.endSample >= 0)
+        windowEnd = std::min (windowEnd, stream.endSample);
+
+    if (windowEnd <= windowStart)
+    {
+        if (stream.endSample >= 0 && windowStart >= stream.endSample)
+            stream.active = false;
+        return;
+    }
+
+    StreamContext ctx;
+    ctx.realization = stream.realization;
+    ctx.profile = stream.profile;
+    ctx.sampleRate = sampleRate;
+    ctx.bpm = tempoBpm;
+    ctx.seed = stream.seed;
+    ctx.streamStartSample = stream.startSample;
+
+    ScheduledNoteList<64> events;
+    PatternEngine::generateWindow (ctx, windowStart, windowEnd, events);
+    scheduler.scheduleIntoGroup (stream.groupId, events, stream.startSample);
+
+    stream.generatedUntil = windowEnd;
+    if (stream.endSample >= 0 && windowEnd >= stream.endSample)
+        stream.active = false;
+}
+
+void EngineHost::stopStream (int64_t atSample)
+{
+    if (! stream.active)
+        return;
+    stream.active = false;
+    scheduler.releaseGroup (stream.groupId, atSample);
 }
 
 void EngineHost::clearIfSilent()
@@ -440,6 +623,8 @@ void EngineHost::processBlock (juce::MidiBuffer& out, int numSamples)
             sequencerPlaying = true;
             currentSlot = 0;
             nextBarSample = blockEnd; // first chord lands at the next block boundary
+            if (stream.active)
+                stopStream (blockStart);
             if (sequencerGroupId > 0)
                 scheduler.releaseGroup (sequencerGroupId, blockStart);
             break;
@@ -447,6 +632,8 @@ void EngineHost::processBlock (juce::MidiBuffer& out, int numSamples)
         case 2:
             sequencerPlaying = false;
             resumeAtNextBar = false;
+            if (stream.active)
+                stopStream (blockStart);
             if (sequencerGroupId > 0)
             {
                 scheduler.releaseGroup (sequencerGroupId, blockStart);
@@ -538,6 +725,8 @@ void EngineHost::processBlock (juce::MidiBuffer& out, int numSamples)
     }
 
     state.isSequencerPlaying = sequencerPlaying;
+
+    pumpStream (blockEnd);
 
     scheduler.processBlock (out, numSamples);
     scheduler.rebuildStateBits (state);

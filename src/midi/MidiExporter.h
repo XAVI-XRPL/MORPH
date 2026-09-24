@@ -21,7 +21,7 @@ public:
     struct ChordEvent
     {
         int64_t startSample = 0;                       // absolute
-        ScheduledNoteList<maxChordVoices> notes;       // offsets relative to startSample
+        ScheduledNoteList<64> notes;                   // offsets relative to startSample
     };
 
     /**

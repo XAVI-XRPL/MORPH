@@ -165,16 +165,22 @@ void PluginEditor::timerCallback()
     radialField.setState (snapshot);
 
     const auto version = processor.engine.progressionVersion.load();
-    if (version != lastProgressionVersion)
+    const int styleNow = (int) processor.apvts.getRawParameterValue ("styleIndex")->load();
+    const int keyNow = (int) processor.apvts.getRawParameterValue ("keyIndex")->load();
+    if (version != lastProgressionVersion || styleNow != lastStyleIndex || keyNow != lastKeyIndex)
     {
         lastProgressionVersion = version;
+        lastStyleIndex = styleNow;
+        lastKeyIndex = keyNow;
         refreshProgressionDisplay();
     }
 
     refreshKeyLabel();
 
     const int mode = (int) processor.apvts.getRawParameterValue ("performanceMode")->load();
-    header.setPerformanceValue (mode == 0 ? "TOGETHER" : mode == 1 ? "STRUM ↑" : "STRUM ↓");
+    static const char* modeNames[numPerformanceModes] =
+        { "TOGETHER", "STRUM ↑", "STRUM ↓", "PULSE", "PATTERN", "ARP" };
+    header.setPerformanceValue (modeNames[mode % numPerformanceModes]);
 
     const int styleIdx = (int) processor.apvts.getRawParameterValue ("styleIndex")->load();
     header.setFeelValue (StyleProfile::get ((StyleId) styleIdx).displayName);
@@ -225,17 +231,71 @@ void PluginEditor::showFeelPopover()
 
 void PluginEditor::showPerformanceMenu()
 {
+    auto setParam = [this] (const char* id, float plain)
+    {
+        if (auto* param = processor.apvts.getParameter (id))
+            param->setValueNotifyingHost (param->convertTo0to1 (plain));
+    };
+
     juce::PopupMenu menu;
     const int current = (int) processor.apvts.getRawParameterValue ("performanceMode")->load();
-    const juce::StringArray modes { "TOGETHER", "STRUM ↑", "STRUM ↓" };
+    const juce::StringArray modes { "TOGETHER", "STRUM ↑", "STRUM ↓", "PULSE", "PATTERN", "ARP" };
 
     for (int i = 0; i < modes.size(); ++i)
         menu.addItem (modes[i], true, i == current,
-                      [this, i]
+                      [this, i, setParam]
                       {
-                          processor.apvts.getParameter ("performanceMode")
-                              ->setValueNotifyingHost ((float) i / 2.0f);
+                          setParam ("performanceMode", (float) i);
+                          // Pill choices pin the default direction for strums (§5).
+                          if (i == 1) setParam ("strumDirection", (float) StrumDirection::up);
+                          if (i == 2) setParam ("strumDirection", (float) StrumDirection::down);
                       });
+
+    // Contextual parameters (§5): only what the active mode needs.
+    if (current == 1 || current == 2)
+    {
+        const int dirCurrent = (int) processor.apvts.getRawParameterValue ("strumDirection")->load();
+        juce::PopupMenu dirMenu;
+        const char* dirNames[numStrumDirections] =
+            { "UP", "DOWN", "UP-DOWN", "DOWN-UP", "OUTSIDE-IN", "INSIDE-OUT", "CONTROLLED RANDOM" };
+        for (int d = 0; d < numStrumDirections; ++d)
+            dirMenu.addItem (dirNames[d], true, d == dirCurrent,
+                             [this, d, setParam] { setParam ("strumDirection", (float) d); });
+        menu.addSubMenu ("Direction", dirMenu);
+    }
+
+    if (current == 3 || current == 5) // PULSE / ARP share the rate control
+    {
+        const int rateCurrent = (int) processor.apvts.getRawParameterValue ("streamRate")->load();
+        juce::PopupMenu rateMenu;
+        const char* rateNames[3] = { "1/8", "1/16", "1/8 T" };
+        for (int r = 0; r < 3; ++r)
+            rateMenu.addItem (rateNames[r], true, r == rateCurrent,
+                              [this, r, setParam] { setParam ("streamRate", (float) r); });
+        menu.addSubMenu ("Rate", rateMenu);
+    }
+
+    if (current == 5) // ARP direction
+    {
+        const int arpCurrent = (int) processor.apvts.getRawParameterValue ("arpDirection")->load();
+        juce::PopupMenu arpMenu;
+        const char* arpNames[3] = { "UP", "DOWN", "UP-DOWN" };
+        for (int d = 0; d < 3; ++d)
+            arpMenu.addItem (arpNames[d], true, d == arpCurrent,
+                             [this, d, setParam] { setParam ("arpDirection", (float) d); });
+        menu.addSubMenu ("Arp direction", arpMenu);
+    }
+
+    if (current == 4) // PATTERN kind
+    {
+        const int patCurrent = (int) processor.apvts.getRawParameterValue ("patternKind")->load();
+        juce::PopupMenu patMenu;
+        const char* patNames[3] = { "BOUNCE", "FLOAT", "STAB" };
+        for (int k = 0; k < 3; ++k)
+            patMenu.addItem (patNames[k], true, k == patCurrent,
+                             [this, k, setParam] { setParam ("patternKind", (float) k); });
+        menu.addSubMenu ("Pattern", patMenu);
+    }
 
     // Contextual strum parameters (§5): spread adjustment lives here, not
     // permanently on the main surface.

@@ -5,6 +5,7 @@
 #include "harmony/HarmonyEngine.h"
 #include "voicing/VoicingEngine.h"
 #include "performance/PerformanceEngine.h"
+#include "performance/PatternEngine.h"
 #include "progression/Progression.h"
 #include "morph/MorphEngine.h"
 #include "bank/ProgressionBank.h"
@@ -43,6 +44,12 @@ public:
     std::atomic<int> bassPolicy { (int) BassStrumPolicy::withStrum };
     std::atomic<int> topVoicePolicy { (int) TopVoicePerformancePolicy::normal };
     std::atomic<float> strumSpreadMs { 42.0f };
+
+    // M8 stream settings
+    std::atomic<int> strumDirectionSetting { (int) StrumDirection::up };
+    std::atomic<int> streamRate { (int) StreamRate::sixteenth };
+    std::atomic<int> arpDirectionSetting { (int) ArpDirection::up };
+    std::atomic<int> patternKindSetting { (int) PatternKind::bounce };
 
     std::atomic<float> colorKnob { 0.5f };   // harmonic brightness
     std::atomic<float> motionKnob { 0.5f };  // strum/performance movement
@@ -131,6 +138,12 @@ private:
     void updateGeneratedState (const ChordRealization& r, const ScheduledNoteList<maxChordVoices>& notes);
     void clearIfSilent();
 
+    // M8 streams (pulse/pattern/arp)
+    void startStream (const ChordRealization& r, int64_t origin, int64_t end, uint32_t seed);
+    void pumpStream (int64_t blockEnd);
+    void stopStream (int64_t atSample);
+    void scheduleHeldAnchor (int pitch, int vel, int64_t origin, int64_t end, VoiceRole role);
+
     double sampleRate = 44100.0;
     int blockSize = 512;
 
@@ -193,6 +206,20 @@ private:
     int64_t activeGroupOrigin = 0;
     int64_t activeSpreadSamples = 1;
     int activeGroupNoteCount = 0;
+
+    // M8 stream state
+    struct StreamState
+    {
+        bool active = false;
+        int64_t startSample = 0;
+        int64_t endSample = -1;    // -1 = open-ended (live)
+        int64_t generatedUntil = 0;
+        int groupId = -1;
+        uint32_t seed = 1;
+        ChordRealization realization;
+        PerformanceProfile profile;
+    };
+    StreamState stream;
 
     MusicalPlaybackState state;
     PlaybackStateBuffer stateSnapshot;

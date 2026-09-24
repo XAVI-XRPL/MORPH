@@ -11,16 +11,16 @@ Contract milestones (MASTER_BUILD_PROMPT.md §95–§104) and status.
 | 5 | Creative Workflow | **DONE** | MORPH = deterministic progression sibling (lock-aware); right-click puck locks; undo/redo exact restore; performance presets (§58) in EXPLORE; MIDI drag-out + save dialog; acceptance: locked slot identical after morph |
 | 6 | Progression Intelligence | **DONE** | beam search (32/12) + seed wobble, 6 style grammars, QualityMetrics (§71), 300 GOLD bank validated + deduped + auditionable, EXPLORE alternatives wired |
 | 7 | Commercial Bank | Pending | style families per §101; songs over count |
-| 8 | Advanced Performance | Pending | PULSE/PATTERN/(ARP) only after strum excellence (strum is tested-excellent) |
+| 8 | Advanced Performance | **DONE** | PULSE/PATTERN/ARP as tempo-synced deterministic streams on the truth pipeline; 7 strum directions; stream presets; truth invariant holds through streams (release/retrigger/sequencer) |
 | 9 | Song Kit | Pending | SongDNA/PerformanceDNA/sections; 10 → 100 → 250+ GOLD kits |
 | 10 | Song Workflow | Pending | BUILD SONG etc.; main UI unchanged |
 
 ## Next recommended milestone
 
-**M7 — Commercial Bank Expansion**: the generation/validation machinery is
-proven on 6 styles; M7 widens the vocabulary (reggaeton/dembow rhythm,
-Latin pop) and deepens content quality. Alternatively M8 (PULSE/PATTERN)
-if performance breadth is valued first.
+**M9 — Song Kit**: with harmony, voicing, performance, progression,
+generation, bank and workflow all proven, Song Kit is the remaining
+structural layer (SongDNA/PerformanceDNA/sections). M7 (commercial bank
+content) can ride on M6's machinery at any point.
 
 ## Current known limitations
 

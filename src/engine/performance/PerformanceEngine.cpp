@@ -92,7 +92,6 @@ PerformanceEngine::schedule (const ChordRealization& realization,
 
     // --- STRUM ---
     const auto& sp = profile.strum;
-    const bool up = (profile.mode == PerformanceMode::strumUp);
 
     // 1. Pitch-ordered working set.
     std::array<Voice, Voicing::maxVoices> ordered {};
@@ -146,15 +145,80 @@ PerformanceEngine::schedule (const ChordRealization& realization,
         if (ti >= 0) { topVoice = ordered[(size_t) ti]; removeAt (ti); topExtracted = true; }
     }
 
-    // 3. Remaining voices in strum direction order.
-    std::array<Voice, Voicing::maxVoices> strummed {};
+    // 3. Remaining voices in strum direction order (§54 directions, M8).
+    std::array<Voice, Voicing::maxVoices * 2> strummed {};
     int sCount = 0;
-    for (int i = 0; i < m; ++i)
-        strummed[(size_t) sCount++] = up ? ordered[(size_t) i]
-                                         : ordered[(size_t) (m - 1 - i)];
+    const auto dir = sp.direction;
+
+    switch (dir)
+    {
+        case StrumDirection::up:
+        default:
+            for (int i = 0; i < m; ++i)
+                strummed[(size_t) sCount++] = ordered[(size_t) i];
+            break;
+
+        case StrumDirection::down:
+            for (int i = m - 1; i >= 0; --i)
+                strummed[(size_t) sCount++] = ordered[(size_t) i];
+            break;
+
+        case StrumDirection::upDown:
+            for (int i = 0; i < m; ++i)
+                strummed[(size_t) sCount++] = ordered[(size_t) i];
+            for (int i = m - 2; i >= 1; --i)
+                strummed[(size_t) sCount++] = ordered[(size_t) i];
+            break;
+
+        case StrumDirection::downUp:
+            for (int i = m - 1; i >= 0; --i)
+                strummed[(size_t) sCount++] = ordered[(size_t) i];
+            for (int i = 1; i < m - 1; ++i)
+                strummed[(size_t) sCount++] = ordered[(size_t) i];
+            break;
+
+        case StrumDirection::outsideIn:
+            for (int lo = 0, hi = m - 1; lo <= hi; ++lo, --hi)
+            {
+                strummed[(size_t) sCount++] = ordered[(size_t) lo];
+                if (hi != lo)
+                    strummed[(size_t) sCount++] = ordered[(size_t) hi];
+            }
+            break;
+
+        case StrumDirection::insideOut:
+        {
+            const int mid = m / 2;
+            if (m > 0)
+                strummed[(size_t) sCount++] = ordered[(size_t) mid];
+            for (int d = 1; d <= mid; ++d)
+            {
+                if (mid - d >= 0)
+                    strummed[(size_t) sCount++] = ordered[(size_t) (mid - d)];
+                if (mid + d < m)
+                    strummed[(size_t) sCount++] = ordered[(size_t) (mid + d)];
+            }
+            break;
+        }
+
+        case StrumDirection::randomControlled:
+        {
+            std::array<int, Voicing::maxVoices> idx {};
+            for (int i = 0; i < m; ++i)
+                idx[(size_t) i] = i;
+            for (int i = m - 1; i > 0; --i)
+            {
+                const int j = (int) (rng.nextFloat() * (float) (i + 1));
+                std::swap (idx[(size_t) i], idx[(size_t) j]);
+            }
+            for (int i = 0; i < m; ++i)
+                strummed[(size_t) sCount++] = ordered[(size_t) idx[(size_t) i]];
+            break;
+        }
+    }
 
     // 4. Assemble final attack order.
-    std::array<Voice, Voicing::maxVoices + 1> order {};
+    std::array<Voice, Voicing::maxVoices * 2 + 1> order {};
     int oCount = 0;
 
     const bool bassFirst = bassExtracted

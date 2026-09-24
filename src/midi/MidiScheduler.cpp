@@ -35,30 +35,7 @@ int MidiScheduler::scheduleChord (const ScheduledNoteList<maxChordVoices>& notes
                                   int64_t originSample)
 {
     const int groupId = nextGroupId++;
-    const int64_t origin = std::max (originSample, clockSamples);
-
-    for (int i = 0; i < notes.count; ++i)
-    {
-        const auto& n = notes.notes[(size_t) i];
-
-        PendingEvent on;
-        on.sampleTime = origin + n.noteOnSampleOffset;
-        on.pitch = (uint8_t) n.pitch;
-        on.velocity = (uint8_t) juce::jlimit (1, 127, n.velocity);
-        on.role = (int8_t) n.role;
-        on.groupId = groupId;
-        on.isNoteOn = true;
-        insertEvent (on);
-
-        if (n.noteOffSampleOffset >= 0)
-        {
-            PendingEvent off = on;
-            off.sampleTime = origin + n.noteOffSampleOffset;
-            off.isNoteOn = false;
-            insertEvent (off);
-        }
-    }
-
+    scheduleIntoGroup (groupId, notes, originSample);
     return groupId;
 }
 

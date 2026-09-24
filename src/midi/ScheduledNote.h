@@ -7,8 +7,9 @@
 namespace morph
 {
 
-/** Max voices in one scheduled chord performance. */
-inline constexpr int maxChordVoices = 16;
+/** Max voices in one scheduled chord performance (up-down strums
+    and 6-voice roundtrips can exceed 16). */
+inline constexpr int maxChordVoices = 20;
 
 /** One scheduled MIDI note with sample-accurate on/off offsets. */
 struct ScheduledNote
@@ -30,6 +31,14 @@ struct ScheduledNoteList
     {
         if (count < capacity)
             notes[(size_t) count++] = n;
+    }
+
+    template <int M>
+    void assignFrom (const ScheduledNoteList<M>& other)
+    {
+        clear();
+        for (int i = 0; i < other.count; ++i)
+            add (other.notes[(size_t) i]);
     }
 
     void clear() { count = 0; }

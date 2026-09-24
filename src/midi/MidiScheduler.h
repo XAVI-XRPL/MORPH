@@ -31,6 +31,38 @@ public:
     /** Schedules a performed chord. Returns the group id (> 0). */
     int  scheduleChord (const ScheduledNoteList<maxChordVoices>& notes, int64_t originSample);
 
+    /** Schedules additional events into an existing group (streams refill
+        through this so one release kills the whole stream). */
+    template <int N>
+    void scheduleIntoGroup (int groupId, const ScheduledNoteList<N>& notes, int64_t originSample)
+    {
+        const int64_t origin = std::max (originSample, clockSamples);
+        for (int i = 0; i < notes.count; ++i)
+        {
+            const auto& n = notes.notes[(size_t) i];
+
+            PendingEvent on;
+            on.sampleTime = origin + n.noteOnSampleOffset;
+            on.pitch = (uint8_t) n.pitch;
+            on.velocity = (uint8_t) juce::jlimit (1, 127, n.velocity);
+            on.role = (int8_t) n.role;
+            on.groupId = groupId;
+            on.isNoteOn = true;
+            insertEvent (on);
+
+            if (n.noteOffSampleOffset >= 0)
+            {
+                PendingEvent off = on;
+                off.sampleTime = origin + n.noteOffSampleOffset;
+                off.isNoteOn = false;
+                insertEvent (off);
+            }
+        }
+    }
+
+    /** Allocates a group id without scheduling events (stream anchor). */
+    int  allocateGroup() { return nextGroupId++; }
+
     /** Sustain-aware release: cancels pending attacks, note-offs sounding
         notes now (or defers them while sustain is held). */
     void releaseGroup (int groupId, int64_t atSample);

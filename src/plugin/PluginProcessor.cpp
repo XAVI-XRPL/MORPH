@@ -14,7 +14,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MorphAudioProcessor::createP
 
     layout.add (std::make_unique<API> ("keyIndex", "Key", 0, 11, 0));
     layout.add (std::make_unique<API> ("styleIndex", "Style", 0, numImplementedStyles - 1, 0));
-    layout.add (std::make_unique<API> ("performanceMode", "Performance", 0, 2, 0));
+    layout.add (std::make_unique<API> ("performanceMode", "Performance", 0, 5, 0)); // + pulse/pattern/arp (M8)
     layout.add (std::make_unique<APF> ("strumSpread", "Strum Spread", NAP (20.0f, 120.0f), 42.0f));
 
     layout.add (std::make_unique<API> ("togetherKind",   "Together Kind", 0, 3, 0));
@@ -22,6 +22,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout MorphAudioProcessor::createP
     layout.add (std::make_unique<API> ("strumVelShape",  "Strum Vel",     0, 2, 1)); // rise
     layout.add (std::make_unique<API> ("bassPolicy",     "Bass Policy",   0, 4, 0));
     layout.add (std::make_unique<API> ("topPolicy",      "Top Policy",    0, 4, 0));
+
+    layout.add (std::make_unique<API> ("strumDirection", "Strum Dir",     0, 6, 0));
+    layout.add (std::make_unique<API> ("streamRate",     "Stream Rate",   0, 2, 1));
+    layout.add (std::make_unique<API> ("arpDirection",   "Arp Dir",       0, 2, 0));
+    layout.add (std::make_unique<API> ("patternKind",    "Pattern",       0, 2, 0));
 
     layout.add (std::make_unique<APF> ("color",   "COLOR",   NAP (0.0f, 1.0f), 0.5f));
     layout.add (std::make_unique<APF> ("motion",  "MOTION",  NAP (0.0f, 1.0f), 0.5f));
@@ -85,6 +90,10 @@ void MorphAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     engine.strumVelocityShape.store ((int) load ("strumVelShape"), std::memory_order_relaxed);
     engine.bassPolicy.store ((int) load ("bassPolicy"), std::memory_order_relaxed);
     engine.topVoicePolicy.store ((int) load ("topPolicy"), std::memory_order_relaxed);
+    engine.strumDirectionSetting.store ((int) load ("strumDirection"), std::memory_order_relaxed);
+    engine.streamRate.store ((int) load ("streamRate"), std::memory_order_relaxed);
+    engine.arpDirectionSetting.store ((int) load ("arpDirection"), std::memory_order_relaxed);
+    engine.patternKindSetting.store ((int) load ("patternKind"), std::memory_order_relaxed);
     engine.colorKnob.store (load ("color"), std::memory_order_relaxed);
     engine.motionKnob.store (load ("motion"), std::memory_order_relaxed);
     engine.morphKnob.store (load ("morph"), std::memory_order_relaxed);

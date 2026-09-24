@@ -45,3 +45,24 @@ bar-length notes. Release before strum end = CANCEL_PENDING_ATTACKS (default;
 COMPLETE_STRUM reserved). Retrigger: cancel pending, release non-common tones,
 adopt common tones without re-attack (implemented by EngineHost +
 MidiScheduler group primitives).
+
+## Stream modes (M8, §102): PULSE / PATTERN / ARP
+
+- New `PerformanceMode` values: pulse, pattern, arp (isStreamMode helper).
+- `PatternEngine` generates events per absolute-sample window from
+  (realization, profile, tempo, stream start, seed) — a pure function, so
+  refills == continuation and export == playback. Events join the SAME
+  scheduler group as the trigger's chord, so release/retrigger/stop kill the
+  whole stream through the existing group lifecycle (no stuck notes — tested).
+- PULSE: full-chord re-strikes on the grid (1/8, 1/16, 1/8T), accentEvery,
+  gate ratio, TEXTURE adds swing; optional bass hold (MOTION low).
+- ARP: cycles chord tones (octave-expanded via MOTION), up/down/up-down,
+  rate shared with PULSE, optional top hold.
+- PATTERN: curated one-bar loops on an eighth grid — BOUNCE (bass anchors +
+  offbeat chord answers), FLOAT (slow swell, top holds), STAB (syncopated
+  hits).
+- Strum directions (§54): up, down, up-down, down-up, outside-in, inside-out,
+  controlled-random (seeded). Contextual Direction menu under the performance
+  pill (§5), never permanent surface controls.
+- Sequencer runs streams per bar (one stream per slot, tempo-synced to host);
+  live override and release/resume semantics unchanged.

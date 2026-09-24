@@ -33,6 +33,7 @@ set(MORPH_ENGINE_SOURCES
     src/engine/bank/GoldBank.cpp
     src/engine/morph/MorphEngine.cpp
     src/engine/performance/PerformanceEngine.cpp
+    src/engine/performance/PatternEngine.cpp
     src/engine/EngineHost.cpp
     src/midi/MidiScheduler.cpp
     src/midi/MidiExporter.cpp
@@ -117,11 +118,13 @@ target_sources(MorphTests PRIVATE
     tests/morph/MorphLockTests.cpp
     tests/bank/BankTests.cpp
     tests/performance/PerformanceTests.cpp
+    tests/performance/StreamTests.cpp
     tests/midi/MidiSchedulerTests.cpp
     tests/midi/MidiExportTests.cpp
     tests/keyboard/KeyboardGeometryTests.cpp
     tests/integration/GoldenScenarioTests.cpp
     tests/integration/TruthInvariantTests.cpp
+    tests/integration/StreamTruthTests.cpp
 )
 
 target_include_directories(MorphTests PRIVATE src tests)

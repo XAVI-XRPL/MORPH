@@ -169,3 +169,12 @@ uniqueness. The bank ships compiled (no runtime I/O). Regenerate with:
 MORPH (M5) keeps its tested deterministic substitution semantics. The M6
 generator/bank feed EXPLORE → "Progression alternatives" (lock-preserving
 merge). A generator-driven morph can be evaluated later against real usage.
+
+## D27 — M8 streams share the chord's scheduler group
+PULSE/PATTERN/ARP events are generated per window into the trigger's group
+id, so the existing lifecycle (release-cancel, sustain deferral, retrigger
+adoption, allNotesOff) covers streams with zero new lifecycle machinery.
+Streams are pure functions of (realization, profile, tempo, absolute grid,
+seed) — window boundaries never affect content; export renders identical
+windows. UI: mode pill lists 6 modes; contextual submenus (Direction, Rate,
+Pattern, Arp direction) appear only for the active mode (§5).

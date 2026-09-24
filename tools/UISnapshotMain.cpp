@@ -86,6 +86,16 @@ int main (int argc, char* argv[])
     pumpFrames (20);
     snapshot ("morph_neosoul.png");
 
+    // 7. M8: PULSE mode mid-stream.
+    processor->apvts.getParameter ("styleIndex")->setValueNotifyingHost (0.0f);
+    processor->apvts.getParameter ("performanceMode")->setValueNotifyingHost (3.0f / 5.0f);
+    pumpFrames (6);
+    processor->uiNoteQueue.push ({ 48, true, 1.0f });
+    pumpFrames (5);
+    snapshot ("morph_pulse.png");
+    processor->uiNoteQueue.push ({ 48, false, 0.0f });
+    pumpFrames (4);
+
     processor->engine.stop();
     juce::MessageManager::deleteInstance();
     return 0;
