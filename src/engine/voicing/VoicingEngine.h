@@ -9,6 +9,29 @@
 namespace morph
 {
 
+/** Voice-leading memory threaded across realizations (bass/top/direction +
+    the previous voicing for movement scoring). */
+struct VoiceLeadingMemory
+{
+    bool valid = false;
+    Voicing voicing {};
+    int bass = -1;
+    int top = -1;
+    int topDirection = 0; // -1 falling, 0 static, +1 rising
+};
+
+inline void advanceVoiceLeadingMemory (VoiceLeadingMemory& mem, const ChordRealization& r)
+{
+    const int prevTop = mem.top;
+    mem.valid = true;
+    mem.voicing = r.voicing;
+    mem.bass = r.bassPitch.value;
+    mem.top = r.topPitch.value;
+    mem.topDirection = prevTop < 0 ? 0
+                    : r.topPitch.value > prevTop ? 1
+                    : r.topPitch.value < prevTop ? -1 : 0;
+}
+
 /** Sequence context for voice leading (previous chord memory). */
 struct VoicingContext
 {

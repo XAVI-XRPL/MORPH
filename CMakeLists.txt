@@ -28,6 +28,9 @@ set(MORPH_ENGINE_SOURCES
     src/engine/bass/BassEngine.cpp
     src/engine/topline/TopVoiceEngine.cpp
     src/engine/progression/Progression.cpp
+    src/engine/progression/QualityMetrics.cpp
+    src/engine/progression/ProgressionGenerator.cpp
+    src/engine/bank/GoldBank.cpp
     src/engine/morph/MorphEngine.cpp
     src/engine/performance/PerformanceEngine.cpp
     src/engine/EngineHost.cpp
@@ -110,7 +113,9 @@ target_sources(MorphTests PRIVATE
     tests/topline/TopVoiceEngineTests.cpp
     tests/progression/ProgressionPlanTests.cpp
     tests/progression/PlanDumpTests.cpp
+    tests/progression/GeneratorTests.cpp
     tests/morph/MorphLockTests.cpp
+    tests/bank/BankTests.cpp
     tests/performance/PerformanceTests.cpp
     tests/midi/MidiSchedulerTests.cpp
     tests/midi/MidiExportTests.cpp
@@ -175,6 +180,33 @@ target_link_libraries(MorphUISnapshot PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_extra
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+)
+
+
+#==============================================================================
+# Bank tool (generation / validation / audition, §100)
+
+juce_add_console_app(MorphBankTool)
+
+juce_generate_juce_header(MorphBankTool)
+
+target_sources(MorphBankTool PRIVATE
+    ${MORPH_ENGINE_SOURCES}
+    tools/BankToolMain.cpp
+)
+
+target_include_directories(MorphBankTool PRIVATE src)
+
+target_compile_definitions(MorphBankTool PUBLIC
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+)
+
+target_link_libraries(MorphBankTool PRIVATE
+    juce::juce_core
+    juce::juce_audio_basics
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
 )

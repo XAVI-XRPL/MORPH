@@ -51,25 +51,11 @@ PerformanceProfile EngineHost::buildProfile() const
     return p;
 }
 
-namespace
-{
-    void advanceMemory (EngineHost::VoiceLeadingMemory& mem, const ChordRealization& r)
-    {
-        const int prevTop = mem.top;
-        mem.valid = true;
-        mem.voicing = r.voicing;
-        mem.bass = r.bassPitch.value;
-        mem.top = r.topPitch.value;
-        mem.topDirection = prevTop < 0 ? 0
-                        : r.topPitch.value > prevTop ? 1
-                        : r.topPitch.value < prevTop ? -1 : 0;
-    }
-}
-
 ChordRealization EngineHost::realizeDegree (ScaleDegree degree, const VoiceLeadingMemory& mem,
                                             int slotIndex) const
 {
     const auto key = currentKey();
+    const auto style = currentStyle();
     const auto candidate = harmony.chordForDegree (key, degree, style,
                                                    colorKnob.load (std::memory_order_relaxed));
 
@@ -99,7 +85,7 @@ void EngineHost::buildProgressionPlan (std::array<ChordRealization, 4>& out) con
     for (int i = 0; i < prog.size; ++i)
     {
         out[(size_t) i] = realizeDegree (prog.slots[(size_t) i].degree, mem, i);
-        advanceMemory (mem, out[(size_t) i]);
+        advanceVoiceLeadingMemory (mem, out[(size_t) i]);
     }
 
     // Loop closure: re-realize slot 0 against slot 3 so the wrap is smooth.
@@ -112,6 +98,7 @@ uint64_t EngineHost::computePlanSignature() const
 {
     auto q = [] (float f) { return (uint64_t) (f * 100.0f); };
     return (uint64_t) (unsigned) keyIndex.load (std::memory_order_relaxed)
+         ^ ((uint64_t) (unsigned) styleIndex.load (std::memory_order_relaxed) << 4)
          ^ (q (colorKnob.load (std::memory_order_relaxed)) << 8)
          ^ (q (spaceKnob.load (std::memory_order_relaxed)) << 20)
          ^ (q (motionKnob.load (std::memory_order_relaxed)) << 32)
@@ -159,6 +146,15 @@ void EngineHost::morphProgressionFromUi()
 
     // Voicing dimension of the sibling (D13): advance the variation too.
     morphVariation.fetch_add (1, std::memory_order_relaxed);
+}
+
+void EngineHost::applyBankEntryFromUi (const BankEntry& entry)
+{
+    auto p = activeProgression();
+    for (int i = 0; i < 4 && i < p.size; ++i)
+        if (! p.slots[(size_t) i].locked)
+            p.slots[(size_t) i].degree = ScaleDegree { (int) entry.degrees[(size_t) i] };
+    setProgressionFromUi (p);
 }
 
 void EngineHost::toggleSlotLockFromUi (int slot)
@@ -264,7 +260,7 @@ void EngineHost::scheduleLive (const ChordRealization& r, int64_t originSample)
     updateGeneratedState (r, notes);
     lastRealization = r;
     hasLastRealization = true;
-    advanceMemory (vlMemory, r);
+    advanceVoiceLeadingMemory (vlMemory, r);
     ++triggerCounter;
 }
 
@@ -369,7 +365,7 @@ void EngineHost::scheduleSequencerSlot (int slot, int64_t barStart, int64_t barL
     updateGeneratedState (realization, notes);
     lastRealization = realization;
     hasLastRealization = true;
-    advanceMemory (vlMemory, realization);
+    advanceVoiceLeadingMemory (vlMemory, realization);
 }
 
 std::vector<MidiExporter::ChordEvent> EngineHost::renderProgressionPerformance()

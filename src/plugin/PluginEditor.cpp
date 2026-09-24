@@ -48,6 +48,7 @@ PluginEditor::PluginEditor (MorphAudioProcessor& p)
     header.onKeyCenter = [this] { showKeyMenu(); };
     header.onFeelCenter = [this] { showFeelPopover(); };
     header.onFeelPrevious = header.onFeelNext = [this] { showFeelPopover(); };
+    header.setFeelValue (StyleProfile::get (StyleId::modernRnB).displayName);
     header.onPerformanceClick = [this] { showPerformanceMenu(); };
     header.onMoreClick = [this] { showMorePopover(); };
     chassis.addAndMakeVisible (header);
@@ -175,6 +176,9 @@ void PluginEditor::timerCallback()
     const int mode = (int) processor.apvts.getRawParameterValue ("performanceMode")->load();
     header.setPerformanceValue (mode == 0 ? "TOGETHER" : mode == 1 ? "STRUM ↑" : "STRUM ↓");
 
+    const int styleIdx = (int) processor.apvts.getRawParameterValue ("styleIndex")->load();
+    header.setFeelValue (StyleProfile::get ((StyleId) styleIdx).displayName);
+
     isPlaying = snapshot.isSequencerPlaying;
     actionRow.setPlaying (isPlaying);
 }
@@ -200,13 +204,21 @@ void PluginEditor::showKeyMenu()
 
 void PluginEditor::showFeelPopover()
 {
-    // V1 ships Modern R&B; the remaining feels arrive with later milestones.
+    // M6: six implemented style grammars; Reggaeton arrives with M7.
     juce::PopupMenu menu;
-    menu.addItem ("Modern R&B", true, true, [] {});
+    const int current = (int) processor.apvts.getRawParameterValue ("styleIndex")->load();
+    for (int i = 0; i < numImplementedStyles; ++i)
+    {
+        const auto style = StyleProfile::get ((StyleId) i);
+        menu.addItem (style.displayName, true, i == current,
+                      [this, i]
+                      {
+                          processor.apvts.getParameter ("styleIndex")
+                              ->setValueNotifyingHost ((float) i / (float) (numImplementedStyles - 1));
+                      });
+    }
     menu.addSeparator();
-    const juce::StringArray coming { "Dark R&B", "Neo-Soul", "Emotional", "Dark Pop", "Trap", "Reggaeton" };
-    for (auto& name : coming)
-        menu.addItem (name + "  (soon)", false, false, [] {});
+    menu.addItem ("Reggaeton  (soon)", false, false, [] {});
     menu.setLookAndFeel (&lookAndFeel);
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&header), {});
 }
@@ -274,6 +286,38 @@ void PluginEditor::showExplorePopover()
         updateUndoRedoButtons();
     });
 
+    // GOLD bank alternatives for the current style (§32, §100).
+    const int styleIdx = (int) processor.apvts.getRawParameterValue ("styleIndex")->load();
+    const auto style = StyleProfile::get ((StyleId) styleIdx);
+    int bankCount = 0;
+    const auto* entries = bankEntriesForStyle ((StyleId) styleIdx, bankCount);
+
+    if (entries != nullptr && bankCount > 0)
+    {
+        juce::PopupMenu alternatives;
+        const int shown = juce::jmin (12, bankCount);
+        for (int i = 0; i < shown; ++i)
+        {
+            const auto& e = entries[i];
+            juce::String label;
+            for (int slot = 0; slot < 4; ++slot)
+            {
+                const auto& spec = style.degrees[(size_t) (e.degrees[(size_t) slot] - 1)];
+                label += romanFunctionToString ({ spec.latticeDegree, spec.accidental,
+                                                  spec.quality, spec.extensions });
+                if (slot < 3)
+                    label += "  ·  ";
+            }
+            alternatives.addItem (label, true, false, [this, entry = e]
+            {
+                undoHistory.checkpoint (currentComposition());
+                processor.engine.applyBankEntryFromUi (entry);
+                updateUndoRedoButtons();
+            });
+        }
+        menu.addSubMenu ("Progression alternatives", alternatives);
+    }
+
     // Performance presets (§58 curated set).
     juce::PopupMenu presets;
     for (int i = 0; i < numPerformancePresets; ++i)
@@ -319,9 +363,10 @@ void PluginEditor::updateUndoRedoButtons()
 void PluginEditor::refreshProgressionDisplay()
 {
     const int idx = (int) processor.apvts.getRawParameterValue ("keyIndex")->load();
+    const int styleIdx = (int) processor.apvts.getRawParameterValue ("styleIndex")->load();
     radialField.setProgression (processor.engine.getProgressionForUi(),
                                 keyContextForMinorTonicIndex (idx),
-                                StyleProfile::modernRnB());
+                                StyleProfile::get ((StyleId) styleIdx));
 }
 
 void PluginEditor::exportMidiToTempAndDrag()

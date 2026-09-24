@@ -45,8 +45,15 @@ progression variations and the curated performance presets (§58). MIDI
 supports save-dialog export and drag-out into the DAW.
 
 **KEY / SCALE (§11).** Segmented pill: arrows step through 12 minor keys,
-center opens the selection menu. FEEL shows Modern R&B; the popover lists
-planned styles as disabled (§17).
+center opens the selection menu.
+
+**FEEL (§12).** Six implemented style grammars (Modern R&B, Dark R&B,
+Neo-Soul, Emotional, Dark Pop, Trap) switch the harmony vocabulary, strum
+recommendations, and progression grammar; Reggaeton listed as upcoming (M7).
+
+**EXPLORE (§32).** Progression variation (morph), curated performance
+presets (§58), and GOLD bank alternatives — 300 validated generated
+progressions (50 per style), applied with locked slots preserved.
 
 **SAVE.** Writes the APVTS state to `~/Documents/MORPH/morph-state.xml`.
 UNDO/REDO are visible and intentionally dimmed (M5). EXPLORE/MORE show
@@ -58,5 +65,5 @@ performance to a `.mid` file (save dialog). Timing equals heard scheduling
 
 ## Deferred to later milestones
 
-Progression generation/beam search/bank (M6/M7), PULSE/PATTERN/ARP (M8),
-Song Kit (M9/M10), capture (§80).
+Bank content expansion (M7), PULSE/PATTERN/ARP (M8), Song Kit (M9/M10),
+capture (§80).

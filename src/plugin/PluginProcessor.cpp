@@ -13,6 +13,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MorphAudioProcessor::createP
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
     layout.add (std::make_unique<API> ("keyIndex", "Key", 0, 11, 0));
+    layout.add (std::make_unique<API> ("styleIndex", "Style", 0, numImplementedStyles - 1, 0));
     layout.add (std::make_unique<API> ("performanceMode", "Performance", 0, 2, 0));
     layout.add (std::make_unique<APF> ("strumSpread", "Strum Spread", NAP (20.0f, 120.0f), 42.0f));
 
@@ -77,6 +78,7 @@ void MorphAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // APVTS → engine atomics.
     auto load = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
     engine.keyIndex.store ((int) load ("keyIndex"), std::memory_order_relaxed);
+    engine.styleIndex.store ((int) load ("styleIndex"), std::memory_order_relaxed);
     engine.strumSpreadMs.store (load ("strumSpread"), std::memory_order_relaxed);
     engine.togetherKind.store ((int) load ("togetherKind"), std::memory_order_relaxed);
     engine.strumCurve.store ((int) load ("strumCurve"), std::memory_order_relaxed);

@@ -9,7 +9,7 @@ Contract milestones (MASTER_BUILD_PROMPT.md §95–§104) and status.
 | 3 | Musical Quality | **DONE** | Candidate voicings + voice-leading scoring (§48), BassEngine (root/flow/pedal/bounce, §50), TopVoiceEngine (contour/stepwise/leap control, §51), sequence-level 4-slot plan with loop closure; plan dump: bass C2→Eb2→F2→G2, top D4→Eb4→Eb4→D4 |
 | 4 | Canonical UI | **DONE** | Reference reproduced (chassis/header/banks/radial/pucks/orb/arcs/action row/keyboard); verified via offscreen renders against docs/UI_REFERENCE_SPEC.md |
 | 5 | Creative Workflow | **DONE** | MORPH = deterministic progression sibling (lock-aware); right-click puck locks; undo/redo exact restore; performance presets (§58) in EXPLORE; MIDI drag-out + save dialog; acceptance: locked slot identical after morph |
-| 6 | Progression Intelligence | Pending | beam search (32/12), style profiles, 300 GOLD seeds, validation/dedup/audition |
+| 6 | Progression Intelligence | **DONE** | beam search (32/12) + seed wobble, 6 style grammars, QualityMetrics (§71), 300 GOLD bank validated + deduped + auditionable, EXPLORE alternatives wired |
 | 7 | Commercial Bank | Pending | style families per §101; songs over count |
 | 8 | Advanced Performance | Pending | PULSE/PATTERN/(ARP) only after strum excellence (strum is tested-excellent) |
 | 9 | Song Kit | Pending | SongDNA/PerformanceDNA/sections; 10 → 100 → 250+ GOLD kits |
@@ -17,9 +17,10 @@ Contract milestones (MASTER_BUILD_PROMPT.md §95–§104) and status.
 
 ## Next recommended milestone
 
-**M6 — Progression Intelligence** (functional generation, beam search,
-300 GOLD seeds, style profiles): the workflow loop (PRESS → MORPH → KEEP)
-is proven; M6 deepens the vocabulary that MORPH and PLAY draw from.
+**M7 — Commercial Bank Expansion**: the generation/validation machinery is
+proven on 6 styles; M7 widens the vocabulary (reggaeton/dembow rhythm,
+Latin pop) and deepens content quality. Alternatively M8 (PULSE/PATTERN)
+if performance breadth is valued first.
 
 ## Current known limitations
 

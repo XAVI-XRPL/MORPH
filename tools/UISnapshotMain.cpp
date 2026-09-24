@@ -79,6 +79,13 @@ int main (int argc, char* argv[])
     pumpFrames (20);
     snapshot ("morph_locked_morphed.png");
 
+    // 6. M6 styles: Neo-Soul feel changes the harmonic vocabulary.
+    processor->engine.toggleSlotLockFromUi (2); // unlock again
+    processor->engine.setProgressionFromUi (Progression()); // reset to gold family
+    processor->apvts.getParameter ("styleIndex")->setValueNotifyingHost (2.0f / 5.0f);
+    pumpFrames (20);
+    snapshot ("morph_neosoul.png");
+
     processor->engine.stop();
     juce::MessageManager::deleteInstance();
     return 0;

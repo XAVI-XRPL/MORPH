@@ -8,31 +8,8 @@ ChordCandidate HarmonyEngine::chordForDegree (const KeyContext& key,
                                               const StyleProfile& style,
                                               float colorAmount) const
 {
-    (void) style;
-
-    // Modern R&B natural-minor functional vocabulary.
-    // Roman numerals are expressed on the major lattice (degree 3/6/7 in
-    // natural minor carry a flat accidental: bIII, bVI, bVII).
-    struct DegreeSpec
-    {
-        int latticeDegree;      // 1..7
-        int accidental;         // relative to major lattice
-        ChordQuality quality;
-        ChordExtensionSet extensions;
-    };
-
-    static const DegreeSpec modernRnBMinor[7] =
-    {
-        { 1,  0, ChordQuality::minor,          extFlat7 | extNinth },  // i9
-        { 2,  0, ChordQuality::halfDiminished, extFlat7 },             // iiø7
-        { 3, -1, ChordQuality::major,          extMajor7 | extNinth }, // bIIImaj9
-        { 4,  0, ChordQuality::minor,          extFlat7 | extNinth },  // iv9
-        { 5,  0, ChordQuality::sus4,           extFlat7 },             // V7sus
-        { 6, -1, ChordQuality::major,          extMajor7 | extNinth }, // bVImaj9
-        { 7, -1, ChordQuality::dominant,       extNinth }              // bVII9
-    };
-
-    const auto& spec = modernRnBMinor[(degree.value - 1) % 7];
+    // The style owns the degree → chord vocabulary (M6).
+    const auto& spec = style.degrees[(degree.value - 1) % 7];
 
     auto extensions = spec.extensions;
 

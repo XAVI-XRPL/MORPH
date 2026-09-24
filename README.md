@@ -16,8 +16,8 @@ physical illuminated keyboard. The canonical contract is
 ## Status
 
 Milestones **1 (Playable Foundation)**, **2 (Performance)**,
-**3 (Musical Quality)**, **4 (Canonical UI)** and **5 (Creative Workflow)**
-are implemented and tested. See `docs/ROADMAP.md`.
+**3 (Musical Quality)**, **4 (Canonical UI)**, **5 (Creative Workflow)**
+and **6 (Progression Intelligence)** are implemented and tested. See `docs/ROADMAP.md`.
 
 - Press C3 → Modern R&B Cm9 (C2 G2 Bb3 D4 Eb4), bass blue / inner orange /
   top yellow, exactly those keys lit.
@@ -45,7 +45,7 @@ ctest --test-dir build --output-on-failure
 # or: ./build/MorphTests_artefacts/Release/MorphTests
 ```
 
-67 suites, ~2860 checks: theory, harmony, voicing (golden Cm9), performance
+76 suites, ~4700 checks: theory, harmony, voicing (golden Cm9), performance
 (strum order/spread/curves, policies), MIDI lifecycle (release/retrigger/
 sustain, stuck-note safety), export timing, keyboard geometry, and the
 core truth invariant (actual MIDI == playback state == keyboard lights,

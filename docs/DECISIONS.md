@@ -144,3 +144,28 @@ lock; a thin ring + pin dot marks locked slots. No new permanent controls.
 ## D22 — Composition state persists inside the APVTS state tree
 Progression degrees/locks + morphVariation ride as ValueTree properties, so
 DAW session save/restore and the SAVE button both capture composition state.
+
+## D23 — StyleProfile owns vocabulary AND grammar (M6)
+Degree maps (quality/extensions per degree, major-lattice romans), transition
+weight matrix, tension arc targets, cadence weight live in StyleProfile;
+HarmonyEngine reads the map. Six implemented styles (Modern R&B, Dark R&B,
+Neo-Soul, Emotional, Dark Pop, Trap); Reggaeton reserved for M7 (needs the
+rhythmic engine).
+
+## D24 — Beam search with per-seed grammar wobble
+ProgressionGenerator: beamWidth 32, branchFactor 12 (§72). Search-time edge
+weights are warped 0.8–1.2 per seed (diversity); final QualityMetrics use TRUE
+style weights so bank scores stay comparable. Slot 0 start degree is seeded
+(mostly tonic; sometimes bVI/iv/bIII color launches) with a tonic rival lineage.
+
+## D25 — GOLD bank is generated, validated, deduplicated, compiled in
+tools/MorphBankTool regenerates src/engine/bank/GoldBank.inc (300 entries:
+50 per style × 6); tests/bank/BankTests.cpp re-derives every entry from its
+seed (determinism), re-checks gold thresholds, and proves per-style
+uniqueness. The bank ships compiled (no runtime I/O). Regenerate with:
+`./build/MorphBankTool_artefacts/Release/MorphBankTool --generate --count=50`.
+
+## D26 — MORPH stays substitution-based; the bank powers alternatives
+MORPH (M5) keeps its tested deterministic substitution semantics. The M6
+generator/bank feed EXPLORE → "Progression alternatives" (lock-preserving
+merge). A generator-driven morph can be evaluated later against real usage.

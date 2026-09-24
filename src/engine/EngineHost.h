@@ -7,6 +7,7 @@
 #include "performance/PerformanceEngine.h"
 #include "progression/Progression.h"
 #include "morph/MorphEngine.h"
+#include "bank/ProgressionBank.h"
 #include "../midi/MidiScheduler.h"
 #include "../midi/MidiExporter.h"
 #include "../state/MusicalPlaybackState.h"
@@ -34,6 +35,7 @@ public:
 
     // --- Settings (message thread, atomic) ---
     std::atomic<int> keyIndex { 0 };                          // 12 minor keys
+    std::atomic<int> styleIndex { 0 };                        // StyleId (M6 FEEL)
     std::atomic<int> performanceMode { (int) PerformanceMode::together };
     std::atomic<int> togetherKind { (int) TogetherKind::tight };
     std::atomic<int> strumCurve { (int) StrumCurve::human };
@@ -70,6 +72,10 @@ public:
     /** Toggle a slot's lock (§67). Locked slots never morph. */
     void toggleSlotLockFromUi (int slot);
 
+    /** Apply a GOLD bank entry: unlocked slots take the entry's degrees,
+        locked slots keep theirs (§9 discipline, §67). */
+    void applyBankEntryFromUi (const BankEntry& entry);
+
     /** Replace the whole progression (undo/redo restore). */
     void setProgressionFromUi (const Progression& p);
 
@@ -102,16 +108,6 @@ public:
     const MusicalPlaybackState& audioState() const { return state; }
     const Progression& getProgression() const { return activeProgression(); }
 
-    /** Voice-leading memory threaded across realizations (M3). */
-    struct VoiceLeadingMemory
-    {
-        bool valid = false;
-        Voicing voicing {};
-        int bass = -1;
-        int top = -1;
-        int topDirection = 0; // -1 falling, 0 static, +1 rising
-    };
-
     /** Deterministic render of a slot degree (used by sequencer + export). */
     ChordRealization realizeDegree (ScaleDegree degree, const VoiceLeadingMemory& mem,
                                     int slotIndex) const;
@@ -141,8 +137,12 @@ private:
     TriggerInterpreter interpreter;
     HarmonyEngine harmony;
     VoicingEngine voicingEngine;
-    StyleProfile style = StyleProfile::modernRnB();
     MorphEngine morphEngine;
+
+    StyleProfile currentStyle() const
+    {
+        return StyleProfile::get ((StyleId) styleIndex.load (std::memory_order_relaxed));
+    }
 
     // Progression double buffer: audio thread reads activeProgression(),
     // message thread writes via setProgressionFromUi (copy → flip).

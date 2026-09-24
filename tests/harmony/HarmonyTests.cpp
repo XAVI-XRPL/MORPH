@@ -57,6 +57,33 @@ MORPH_TEST (harmony, modernRnBVocabulary)
     CHECK_EQ (V.chord.formula.quality, ChordQuality::sus4);
 }
 
+MORPH_TEST (harmony, styleVocabulariesDiffer)
+{
+    // M6: HarmonyEngine reads the style's degree map — the same degree
+    // produces the style's chord identity.
+    const auto key = KeyContext::cMinor();
+    HarmonyEngine harmony;
+
+    const auto rnbV = harmony.chordForDegree (key, ScaleDegree { 5 },
+                                              StyleProfile::get (StyleId::modernRnB), 0.5f);
+    CHECK (rnbV.chord.formula.quality == ChordQuality::sus4);
+    CHECK (chordSymbolToString (rnbV.chord, true) == "G7sus");
+
+    const auto darkV = harmony.chordForDegree (key, ScaleDegree { 5 },
+                                               StyleProfile::get (StyleId::darkRnB), 0.5f);
+    CHECK (darkV.chord.formula.quality == ChordQuality::minor); // minor v: darker
+    CHECK (chordSymbolToString (darkV.chord, true) == "Gm7");
+
+    const auto trapI = harmony.chordForDegree (key, ScaleDegree { 1 },
+                                               StyleProfile::get (StyleId::trap), 0.5f);
+    CHECK (! hasExtension (trapI.chord.formula.extensions, extNinth)); // stark Cm7
+    CHECK (chordSymbolToString (trapI.chord, true) == "Cm7");
+
+    const auto neoSoulIV = harmony.chordForDegree (key, ScaleDegree { 4 },
+                                                   StyleProfile::get (StyleId::neoSoul), 0.5f);
+    CHECK (hasExtension (neoSoulIV.chord.formula.extensions, extEleventh)); // Fm11
+}
+
 MORPH_TEST (harmony, colorKnobScalesBrightness)
 {
     const auto key = KeyContext::cMinor();
